@@ -46,6 +46,7 @@ import { LiveAutomations } from './modules/LiveAutomations'
 import { LiveQuality } from './modules/LiveQuality'
 import { LiveUnreadCount, LiveNotificationsPanel } from './modules/LiveNotifications'
 import { LiveCmdKModal } from './modules/LiveCmdKModal'
+import { NotificationRules } from './modules/NotificationRules'
 
 // ── Data ────────────────────────────────────────────────────────────────────
 
@@ -2418,6 +2419,7 @@ function AuthedWorkspace() {
 
   return (
     <>
+      <NotificationRules />
       {showOrgSwitch && (
         <OrgSelectScreen variant="modal" onClose={() => setShowOrgSwitch(false)} onCreateNew={() => setCreatingOrg(true)} />
       )}
