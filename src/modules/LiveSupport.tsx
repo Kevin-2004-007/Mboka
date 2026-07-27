@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Search, Plus, Trash2, X } from 'lucide-react'
 import { Avatar, StatusBadge, TableHeader } from '../App'
+import { TableSkeleton } from '../ui/Skeleton'
 import { useTickets } from '../data/tickets'
 
 const statusOptions = ['Ouvert', 'En cours', 'Résolu', 'Fermé']
@@ -148,6 +149,7 @@ export function LiveSupport() {
                 <td className="px-4 py-3"><button onClick={() => handleDelete(tkt.id)} className="p-1 rounded hover:bg-red-50 transition-colors"><Trash2 size={14} className="text-gray-300 hover:text-red-400" /></button></td>
               </tr>
             ))}
+            {loading && <TableSkeleton cols={9} />}
             {!loading && filtered.length === 0 && (
               <tr><td colSpan={9} className="px-4 py-10 text-center text-gray-400">Aucun ticket pour l'instant.</td></tr>
             )}

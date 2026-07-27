@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
 import { Avatar, formatEur, TableHeader } from '../App'
+import { TableSkeleton } from '../ui/Skeleton'
 import { useInvoices } from '../data/invoices'
 
 const statusOptions = ['En attente', 'Payée', 'En retard']
@@ -125,6 +126,7 @@ export function LiveFinance() {
                 <td className="px-4 py-3"><button onClick={() => handleDelete(inv.id)} className="p-1 rounded hover:bg-red-50 transition-colors"><Trash2 size={14} className="text-gray-300 hover:text-red-400" /></button></td>
               </tr>
             ))}
+            {loading && <TableSkeleton cols={7} />}
             {!loading && filtered.length === 0 && (
               <tr><td colSpan={7} className="px-4 py-10 text-center text-gray-400">Aucune facture pour l'instant.</td></tr>
             )}

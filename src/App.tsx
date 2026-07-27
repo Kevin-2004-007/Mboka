@@ -45,6 +45,7 @@ import { LiveBI } from './modules/LiveBI'
 import { LiveAutomations } from './modules/LiveAutomations'
 import { LiveQuality } from './modules/LiveQuality'
 import { LiveUnreadCount, LiveNotificationsPanel } from './modules/LiveNotifications'
+import { LiveCmdKModal } from './modules/LiveCmdKModal'
 
 // ── Data ────────────────────────────────────────────────────────────────────
 
@@ -2327,7 +2328,11 @@ function Workspace({
 
   return (
     <div className={`flex h-screen overflow-hidden ${darkMode ? 'bg-[#0B0F19]' : 'bg-[#F9FAFB]'}`}>
-      {showSearch && <CmdKModal onClose={() => setShowSearch(false)} onNavigate={(m) => { setActiveModule(m); setShowSearch(false) }} />}
+      {showSearch && (
+        live
+          ? <LiveCmdKModal onClose={() => setShowSearch(false)} onNavigate={(m) => { setActiveModule(m); setShowSearch(false) }} />
+          : <CmdKModal onClose={() => setShowSearch(false)} onNavigate={(m) => { setActiveModule(m); setShowSearch(false) }} />
+      )}
       {live && <LiveUnreadCount onChange={setLiveUnread} />}
       {showNotifs && (live ? <LiveNotificationsPanel onClose={() => setShowNotifs(false)} /> : <NotificationsPanel onClose={() => setShowNotifs(false)} />)}
 

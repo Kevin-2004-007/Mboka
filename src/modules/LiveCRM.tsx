@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Plus, MoreHorizontal, X } from 'lucide-react'
 import { Avatar, formatEur, dealColumns, columnColors, type DealStatus } from '../App'
+import { CardSkeleton } from '../ui/Skeleton'
 import { useDeals } from '../data/deals'
 
 function initialsOf(name: string) {
@@ -11,6 +12,8 @@ export function LiveCRM() {
   const { data: deals, loading, error, insert, update, remove } = useDeals()
   const [addingIn, setAddingIn] = useState<DealStatus | null>(null)
   const [form, setForm] = useState({ company: '', amount: '', contact: '' })
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dragOverCol, setDragOverCol] = useState<DealStatus | null>(null)
 
   async function handleCreate(stage: DealStatus) {
     if (!form.company.trim()) return
@@ -25,15 +28,24 @@ export function LiveCRM() {
     await remove(id)
   }
 
+  function handleDrop(col: DealStatus) {
+    if (draggingId) update(draggingId, { stage: col })
+    setDraggingId(null)
+    setDragOverCol(null)
+  }
+
   return (
     <div className="p-6 overflow-x-auto">
-      {loading && deals.length === 0 && <p className="text-xs text-gray-400 mb-3">Chargement du pipeline…</p>}
       <div className="flex gap-4 min-w-max">
         {dealColumns.map(col => {
           const colDeals = deals.filter(d => d.stage === col)
           const total = colDeals.reduce((sum, d) => sum + Number(d.amount), 0)
           return (
-            <div key={col} className="w-64 flex flex-col gap-2">
+            <div key={col}
+              onDragOver={e => { e.preventDefault(); setDragOverCol(col) }}
+              onDragLeave={() => setDragOverCol(prev => (prev === col ? null : prev))}
+              onDrop={e => { e.preventDefault(); handleDrop(col) }}
+              className={`w-64 flex flex-col gap-2 rounded-xl transition-colors ${dragOverCol === col ? 'bg-indigo-50/60 ring-2 ring-indigo-200' : ''}`}>
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
                   <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${columnColors[col]}`}>{col}</span>
@@ -41,8 +53,17 @@ export function LiveCRM() {
                 </div>
                 <span className="text-[11px] text-gray-400 font-medium">{formatEur(total)}</span>
               </div>
+              {loading && deals.length === 0 && (
+                <>
+                  <CardSkeleton className="h-24" />
+                  <CardSkeleton className="h-24" />
+                </>
+              )}
               {colDeals.map(deal => (
-                <div key={deal.id} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">
+                <div key={deal.id} draggable
+                  onDragStart={() => setDraggingId(deal.id)}
+                  onDragEnd={() => { setDraggingId(null); setDragOverCol(null) }}
+                  className={`bg-white border border-gray-100 rounded-xl p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all cursor-grab active:cursor-grabbing ${draggingId === deal.id ? 'opacity-40' : ''}`}>
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <p className="text-xs font-semibold text-gray-900 leading-snug">{deal.company}</p>
                     <button onClick={() => handleDelete(deal.id)} className="p-0.5 rounded hover:bg-red-50 transition-colors flex-shrink-0">
@@ -54,10 +75,6 @@ export function LiveCRM() {
                     {deal.contact && <Avatar initials={initialsOf(deal.contact)} size="sm" />}
                     <span className="text-[11px] text-gray-500 flex-1 truncate">{deal.contact ?? '—'}</span>
                   </div>
-                  <select value={deal.stage} onChange={e => update(deal.id, { stage: e.target.value as DealStatus })}
-                    className="mt-2 w-full text-[11px] border border-gray-200 rounded-md px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30">
-                    {dealColumns.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
                 </div>
               ))}
               {addingIn === col ? (

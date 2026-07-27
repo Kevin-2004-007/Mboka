@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Plus, CheckCircle, X } from 'lucide-react'
 import { Avatar, StatusBadge, ProgressBar, formatEur, TableHeader } from '../App'
+import { CardSkeleton } from '../ui/Skeleton'
 import { useProjects } from '../data/projects'
 import { useTimeEntries } from '../data/timeEntries'
 import { useEmployees } from '../data/employees'
@@ -124,6 +125,13 @@ export function LiveProjects() {
                 </div>
               </div>
             ))}
+            {loading && (
+              <>
+                <CardSkeleton className="h-24" />
+                <CardSkeleton className="h-24" />
+                <CardSkeleton className="h-24" />
+              </>
+            )}
             {!loading && projects.length === 0 && (
               <p className="text-center text-gray-400 py-10 text-xs">Aucun projet pour l'instant.</p>
             )}

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Zap, ChevronRight, Play, Pause, Trash2, GripVertical, Plus } from 'lucide-react'
 import { StatusBadge, triggerModules, availableActions } from '../App'
+import { CardSkeleton } from '../ui/Skeleton'
 import { useAutomations } from '../data/automations'
 
 const events = ["Création d'un enregistrement", 'Changement de statut', 'Valeur seuil atteinte', "Date d'échéance dépassée"]
@@ -108,6 +109,12 @@ export function LiveAutomations() {
                 </div>
               </div>
             ))}
+            {loading && (
+              <>
+                <CardSkeleton className="h-20" />
+                <CardSkeleton className="h-20" />
+              </>
+            )}
             {!loading && automations.length === 0 && (
               <p className="text-center text-gray-400 py-10 text-xs">Aucune automatisation pour l'instant.</p>
             )}

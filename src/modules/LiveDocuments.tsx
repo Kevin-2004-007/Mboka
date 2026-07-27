@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useOrganization } from '@clerk/react'
 import { Search, Folder, List, Grid, Upload, Trash2, Download } from 'lucide-react'
 import { DocIcon, TableHeader, docFolders } from '../App'
+import { TableSkeleton } from '../ui/Skeleton'
 import { useSupabaseClient } from '../lib/supabase'
 import { useDocuments } from '../data/documents'
 
@@ -136,6 +137,7 @@ export function LiveDocuments() {
                     </td>
                   </tr>
                 ))}
+                {loading && <TableSkeleton cols={6} />}
                 {!loading && filtered.length === 0 && (
                   <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400">Aucun document pour l'instant.</td></tr>
                 )}

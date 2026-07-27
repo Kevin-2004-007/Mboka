@@ -4,6 +4,7 @@ import {
 } from 'recharts'
 import { Search, GripVertical, Minus, PlusCircle, Download, Trash2 } from 'lucide-react'
 import { formatEur, TableHeader, biBarData, availableMetrics } from '../App'
+import { TableSkeleton } from '../ui/Skeleton'
 import { useBiReports } from '../data/biReports'
 import { useDeals } from '../data/deals'
 
@@ -127,6 +128,7 @@ export function LiveBI() {
                     </td>
                   </tr>
                 ))}
+                {loading && <TableSkeleton cols={5} />}
                 {!loading && reports.length === 0 && (
                   <tr><td colSpan={5} className="px-4 py-10 text-center text-gray-400">Aucun rapport sauvegardé.</td></tr>
                 )}

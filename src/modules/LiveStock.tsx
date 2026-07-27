@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Boxes, AlertCircle, AlertTriangle, TrendingUp, Plus, X, Settings2 } from 'lucide-react'
 import { StatusBadge, formatEur, TableHeader } from '../App'
+import { TableSkeleton } from '../ui/Skeleton'
 import { useStockItems, stockStatus } from '../data/stockItems'
 import type { TableRow } from '../lib/useSupabaseTable'
 import type { StockItem } from '../data/types'
@@ -88,6 +89,7 @@ export function LiveStock() {
                 </tr>
               )
             })}
+            {loading && <TableSkeleton cols={8} />}
             {!loading && items.length === 0 && (
               <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400">Aucune référence pour l'instant.</td></tr>
             )}

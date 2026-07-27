@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, Plus, X, Trash2, Upload, File as FilePdf, Download } from 'lucide-react'
 import { StatusBadge, ProgressBar, Avatar, TableHeader } from '../App'
+import { TableSkeleton } from '../ui/Skeleton'
 import { useAudits, useAuditChecklistItems } from '../data/audits'
 
 const auditTypes = ['Conformité', 'Qualité', 'Sécurité', 'Finance']
@@ -188,6 +189,7 @@ export function LiveQuality() {
                 <td className="px-4 py-3"><ChevronRight size={14} className="text-gray-300" /></td>
               </tr>
             ))}
+            {loading && <TableSkeleton cols={8} />}
             {!loading && audits.length === 0 && (
               <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400">Aucun audit pour l'instant.</td></tr>
             )}

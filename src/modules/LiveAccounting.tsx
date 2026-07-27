@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ArrowLeftRight, AlertTriangle, CheckCircle, PlugZap, RefreshCw, Plus, X } from 'lucide-react'
 import { formatEur, TableHeader } from '../App'
+import { TableSkeleton } from '../ui/Skeleton'
 import { useBankTransactions } from '../data/bankTransactions'
 
 function formatDate(value: string | null) {
@@ -91,6 +92,7 @@ export function LiveAccounting() {
                     </td>
                   </tr>
                 ))}
+                {loading && <TableSkeleton cols={5} />}
                 {!loading && transactions.length === 0 && (
                   <tr><td colSpan={5} className="px-4 py-10 text-center text-gray-400">Aucune transaction pour l'instant.</td></tr>
                 )}

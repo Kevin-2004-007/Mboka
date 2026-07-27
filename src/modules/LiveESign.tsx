@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight, CheckCircle, Clock, PenLine, X, Plus, Trash2 } from 'lucide-react'
 import { StatusBadge, Avatar, TableHeader } from '../App'
+import { TableSkeleton } from '../ui/Skeleton'
 import { useEsignDocuments, useEsignSigners } from '../data/esign'
 
 function formatDate(value: string | null) {
@@ -199,6 +200,7 @@ export function LiveESign() {
                 </tr>
               )
             })}
+            {loading && <TableSkeleton cols={5} />}
             {!loading && filtered.length === 0 && (
               <tr><td colSpan={5} className="px-4 py-10 text-center text-gray-400">Aucune demande de signature.</td></tr>
             )}

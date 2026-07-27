@@ -173,4 +173,12 @@ export function LiveHR() {
                 ))}
                 {leaveRequests.length === 0 && (
                   <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400">Aucune demande de congé.</td></tr>
-               
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}

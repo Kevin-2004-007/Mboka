@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Search, Plus, X, Truck, Send, Trash2 } from 'lucide-react'
 import { Avatar, StatusBadge, formatEur, TableHeader } from '../App'
+import { TableSkeleton } from '../ui/Skeleton'
 import { usePurchaseOrders } from '../data/purchaseOrders'
 
 function initialsOf(name: string) {
@@ -152,6 +153,7 @@ export function LiveProcurement() {
                 </td>
               </tr>
             ))}
+            {loading && <TableSkeleton cols={8} />}
             {!loading && filtered.length === 0 && (
               <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400">Aucun bon de commande pour l'instant.</td></tr>
             )}

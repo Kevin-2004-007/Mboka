@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useOrganization } from '@clerk/react'
 import { Upload, CheckCircle, Download, Paperclip } from 'lucide-react'
 import { StatusBadge, formatEur, TableHeader } from '../App'
+import { TableSkeleton } from '../ui/Skeleton'
 import { useSupabaseClient } from '../lib/supabase'
 import { useExpenses } from '../data/expenses'
 
@@ -129,6 +130,7 @@ export function LiveExpenses() {
                     <td className="px-4 py-3"><StatusBadge status={exp.status} /></td>
                   </tr>
                 ))}
+                {loading && <TableSkeleton cols={7} />}
                 {!loading && filtered.length === 0 && (
                   <tr><td colSpan={7} className="px-4 py-10 text-center text-gray-400">Aucune note de frais pour l'instant.</td></tr>
                 )}
