@@ -108,8 +108,11 @@ export function AcceptInvitationScreen({ ticket }: { ticket: string }) {
     setSubmitting(true)
     setFormError(null)
     const { error } = await signUp.update({
-      ...(missingFields.includes('first_name') && { firstName: firstName.trim() }),
-      ...(missingFields.includes('last_name') && { lastName: lastName.trim() }),
+      // First/last name are always offered here even when Clerk doesn't
+      // strictly require them, so a member's real name shows up in
+      // Paramètres → Membres instead of falling back to their email.
+      ...(firstName.trim() && { firstName: firstName.trim() }),
+      ...(lastName.trim() && { lastName: lastName.trim() }),
       ...(missingFields.includes('password') && { password }),
       ...(missingFields.includes('username') && { username: username.trim() }),
       ...(missingFields.includes('legal_accepted') && { legalAccepted }),
@@ -135,8 +138,8 @@ export function AcceptInvitationScreen({ ticket }: { ticket: string }) {
   }
 
   const canSubmit =
-    (!missingFields.includes('first_name') || firstName.trim()) &&
-    (!missingFields.includes('last_name') || lastName.trim()) &&
+    firstName.trim() !== '' &&
+    lastName.trim() !== '' &&
     (!missingFields.includes('password') || password) &&
     (!missingFields.includes('username') || username.trim()) &&
     (!missingFields.includes('legal_accepted') || legalAccepted) &&
@@ -156,14 +159,10 @@ export function AcceptInvitationScreen({ ticket }: { ticket: string }) {
           <div className="text-left">
             <p className="text-xs text-gray-500 mb-4 text-center">Encore une étape pour rejoindre l'organisation</p>
             <div className="space-y-3">
-              {missingFields.includes('first_name') && (
-                <input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Prénom"
-                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
-              )}
-              {missingFields.includes('last_name') && (
-                <input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Nom"
-                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
-              )}
+              <input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Prénom"
+                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
+              <input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Nom"
+                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
               {missingFields.includes('username') && (
                 <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Nom d'utilisateur"
                   className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
