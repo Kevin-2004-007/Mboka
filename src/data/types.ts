@@ -8,6 +8,7 @@ export type Employee = {
   contract: string
   status: string
   hire_date: string | null
+  user_id: string | null
 }
 
 export type LeaveRequest = {
@@ -179,4 +180,10 @@ export type Notification = {
 export type OrgSettings = {
   active_modules: string[]
   updated_at: string
+}
+
+export type PendingEmployeeInfo = {
+  email: string
+  role: string
+  dept: string
 }

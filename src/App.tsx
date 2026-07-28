@@ -48,6 +48,7 @@ import { LiveQuality } from './modules/LiveQuality'
 import { LiveUnreadCount, LiveNotificationsPanel } from './modules/LiveNotifications'
 import { LiveCmdKModal } from './modules/LiveCmdKModal'
 import { NotificationRules } from './modules/NotificationRules'
+import { EmployeeSync } from './modules/EmployeeSync'
 import { isSupabaseConfigured } from './lib/supabase'
 import { SupabaseSetupNotice } from './auth/SupabaseSetupNotice'
 import { useInvitationTicket, AcceptInvitationScreen } from './auth/AcceptInvitation'
@@ -2434,6 +2435,7 @@ function AuthedWorkspace() {
   return (
     <>
       <NotificationRules />
+      <EmployeeSync />
       {showOrgSwitch && (
         <OrgSelectScreen variant="modal" onClose={() => setShowOrgSwitch(false)} onCreateNew={() => setCreatingOrg(true)} />
       )}

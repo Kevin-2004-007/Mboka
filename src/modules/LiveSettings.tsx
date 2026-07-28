@@ -5,6 +5,7 @@ import { StatusBadge, Avatar, TableHeader } from '../App'
 import { navItems, ALWAYS_ON_MODULES, type Module } from '../modules'
 import { useOrgSettings } from '../data/orgSettings'
 import { useMemberModuleAccess } from '../data/memberModuleAccess'
+import { usePendingEmployeeInfo } from '../data/pendingEmployeeInfo'
 
 const integrations = [
   { name: 'Stripe Billing', desc: 'Paiements et abonnements', status: 'Non configuré', color: 'text-gray-400 bg-gray-100' },
@@ -25,10 +26,13 @@ export function LiveSettings() {
   })
   const { activeModules, loading: settingsLoading, setModules } = useOrgSettings()
   const { rows: moduleAccessRows, setAccess } = useMemberModuleAccess()
+  const { insert: insertPendingInfo } = usePendingEmployeeInfo()
   const { session } = useSession()
 
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
+  const [invitePoste, setInvitePoste] = useState('')
+  const [inviteDept, setInviteDept] = useState('')
   const [inviteRole, setInviteRole] = useState<'org:admin' | 'org:member'>('org:member')
   const [inviting, setInviting] = useState(false)
   const [inviteError, setInviteError] = useState<string | null>(null)
@@ -83,8 +87,14 @@ export function LiveSettings() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? "Impossible d'envoyer l'invitation.")
+      // Carries Poste/Département through to invitation acceptance, since
+      // that's where the employee record gets auto-created (see
+      // EmployeeSync.tsx) — the invitation itself has nowhere to hold them.
+      await insertPendingInfo({ email: inviteEmail.trim().toLowerCase(), role: invitePoste.trim(), dept: inviteDept.trim() })
       await invitations?.revalidate?.()
       setInviteEmail('')
+      setInvitePoste('')
+      setInviteDept('')
       setShowInvite(false)
     } catch (err) {
       setInviteError(err instanceof Error ? err.message : "Impossible d'envoyer l'invitation.")
@@ -150,6 +160,22 @@ export function LiveSettings() {
                     <input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="prenom.nom@entreprise.fr"
                       className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-gray-700 mb-1.5 block">Poste</label>
+                      <input value={invitePoste} onChange={e => setInvitePoste(e.target.value)} placeholder="Ex : Comptable"
+                        className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-700 mb-1.5 block">Département</label>
+                      <select value={inviteDept} onChange={e => setInviteDept(e.target.value)}
+                        className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/30">
+                        <option value="">—</option>
+                        {['RH', 'Tech', 'Finance', 'Commercial'].map(d => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-gray-400 -mt-2">Sert à pré-remplir sa fiche dans Ressources Humaines une fois l'invitation acceptée.</p>
                   <div>
                     <label className="text-xs font-medium text-gray-700 mb-1.5 block">Rôle</label>
                     <div className="grid grid-cols-2 gap-2">

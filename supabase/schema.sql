@@ -49,12 +49,20 @@ create table if not exists employees (
   contract text not null,
   status text not null default 'Actif',
   hire_date date,
+  -- Set when this employee record corresponds to an org member's Clerk
+  -- account (every member is an employee — see EmployeeSync.tsx, which
+  -- auto-creates this row once they join). Left null for a plain HR record
+  -- with no MBOKA login of its own.
+  user_id text,
   created_at timestamptz not null default now()
 );
 alter table employees enable row level security;
 create policy "org_isolation" on employees for all
   using (org_id = clerk_org_id())
   with check (org_id = clerk_org_id());
+-- Prevents a race (e.g. two tabs) from creating the same member's employee
+-- record twice; doesn't apply to null user_id (HR-only, no-login records).
+create unique index if not exists employees_org_user_unique on employees(org_id, user_id) where user_id is not null;
 
 create table if not exists leave_requests (
   id uuid primary key default gen_random_uuid(),
@@ -498,6 +506,24 @@ create policy "org_isolation" on member_module_access for all
   with check (org_id = clerk_org_id());
 create trigger member_module_access_set_updated_at before update on member_module_access
   for each row execute function set_updated_at();
+
+-- Carries the "Poste"/"Département" an admin fills in on the invite modal
+-- through to invitation acceptance, since Clerk's invitation itself has
+-- nowhere in this app's flow to stash them. EmployeeSync.tsx consumes (and
+-- deletes) the matching row by email once the invited member's employee
+-- record is auto-created — see fix_employee_sync.sql for why this exists.
+create table if not exists pending_employee_info (
+  id uuid primary key default gen_random_uuid(),
+  org_id text not null,
+  email text not null,
+  role text not null default '',
+  dept text not null default '',
+  created_at timestamptz not null default now()
+);
+alter table pending_employee_info enable row level security;
+create policy "org_isolation" on pending_employee_info for all
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 
 -- ── Storage (file uploads: documents, expense receipts, audit evidence) ─
 -- Convention: objects are uploaded under `{org_id}/...` in this bucket, so
