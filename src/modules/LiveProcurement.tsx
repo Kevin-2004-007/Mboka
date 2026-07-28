@@ -19,6 +19,7 @@ export function LiveProcurement() {
   const [statusFilter, setStatusFilter] = useState('Tous')
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ supplier: '', amount: '', delivery_on: '', items_count: '1' })
+  const [dateError, setDateError] = useState<string | null>(null)
 
   const statuses = ['Tous', 'Brouillon', 'Envoyé', 'Reçu']
   const filtered = orders.filter(po => {
@@ -31,10 +32,23 @@ export function LiveProcurement() {
   const engaged = orders.reduce((s, o) => s + Number(o.amount), 0)
   const awaitingDelivery = orders.filter(o => o.status === 'Envoyé').length
 
+  function nextOrderNumber() {
+    const maxSeq = orders.reduce((max, po) => {
+      const match = /^BC-(\d+)$/.exec(po.number)
+      return match ? Math.max(max, Number(match[1])) : max
+    }, 0)
+    return `BC-${String(maxSeq + 1).padStart(4, '0')}`
+  }
+
   async function handleCreate() {
     if (!form.supplier.trim()) return
+    if (form.delivery_on && form.delivery_on < new Date().toISOString().slice(0, 10)) {
+      setDateError("La livraison prévue ne peut pas être dans le passé.")
+      return
+    }
+    setDateError(null)
     const created = await insert({
-      number: `BC-${Date.now()}`,
+      number: nextOrderNumber(),
       supplier: form.supplier.trim(),
       amount: Number(form.amount) || 0,
       ordered_on: new Date().toISOString().slice(0, 10),
@@ -103,12 +117,12 @@ export function LiveProcurement() {
               </div>
               <div>
                 <label className="text-[11px] text-gray-500 mb-1 block">Livraison prévue</label>
-                <input value={form.delivery_on} onChange={e => setForm(f => ({ ...f, delivery_on: e.target.value }))} type="date"
+                <input value={form.delivery_on} onChange={e => setForm(f => ({ ...f, delivery_on: e.target.value }))} type="date" min={new Date().toISOString().slice(0, 10)}
                   className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-700" />
               </div>
             </div>
-            {error && (
-              <p className="mt-3 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>
+            {(error || dateError) && (
+              <p className="mt-3 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{dateError ?? error}</p>
             )}
             <div className="flex gap-2 mt-6">
               <button onClick={() => setShowCreate(false)} className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Annuler</button>

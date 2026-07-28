@@ -117,6 +117,7 @@ export type EsignDocument = {
   title: string
   status: string
   deadline: string | null
+  storage_path: string | null
 }
 
 export type EsignSigner = {
@@ -124,6 +125,8 @@ export type EsignSigner = {
   name: string
   initials: string | null
   done: boolean
+  token: string
+  user_id: string | null
 }
 
 export type BiReport = {

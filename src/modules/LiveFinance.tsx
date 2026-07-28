@@ -19,7 +19,8 @@ export function LiveFinance() {
   const { data: invoices, loading, error, insert, update, remove } = useInvoices()
   const [statusFilter, setStatusFilter] = useState('Toutes')
   const [showCreate, setShowCreate] = useState(false)
-  const [form, setForm] = useState({ number: '', client: '', amount: '', due_on: '' })
+  const [form, setForm] = useState({ client: '', amount: '', due_on: '' })
+  const [dateError, setDateError] = useState<string | null>(null)
 
   const statuses = ['Toutes', ...statusOptions]
   const filtered = invoices.filter(inv => statusFilter === 'Toutes' || inv.status === statusFilter)
@@ -28,10 +29,23 @@ export function LiveFinance() {
   const totalEnAttente = invoices.filter(i => i.status === 'En attente').reduce((s, i) => s + Number(i.amount), 0)
   const totalEnRetard = invoices.filter(i => i.status === 'En retard').reduce((s, i) => s + Number(i.amount), 0)
 
+  function nextInvoiceNumber() {
+    const maxSeq = invoices.reduce((max, inv) => {
+      const match = /^FCT-(\d+)$/.exec(inv.number)
+      return match ? Math.max(max, Number(match[1])) : max
+    }, 0)
+    return `FCT-${String(maxSeq + 1).padStart(4, '0')}`
+  }
+
   async function handleCreate() {
     if (!form.client.trim() || !form.amount) return
+    if (form.due_on && form.due_on < new Date().toISOString().slice(0, 10)) {
+      setDateError("L'échéance ne peut pas être dans le passé.")
+      return
+    }
+    setDateError(null)
     const created = await insert({
-      number: form.number.trim() || `FCT-${Date.now()}`,
+      number: nextInvoiceNumber(),
       client: form.client.trim(),
       amount: Number(form.amount) || 0,
       issued_on: new Date().toISOString().slice(0, 10),
@@ -39,7 +53,7 @@ export function LiveFinance() {
       status: 'En attente',
     })
     if (!created) return
-    setForm({ number: '', client: '', amount: '', due_on: '' })
+    setForm({ client: '', amount: '', due_on: '' })
     setShowCreate(false)
   }
 
@@ -85,18 +99,16 @@ export function LiveFinance() {
             <div className="space-y-3">
               <input value={form.client} onChange={e => setForm(f => ({ ...f, client: e.target.value }))} placeholder="Client"
                 className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
-              <input value={form.number} onChange={e => setForm(f => ({ ...f, number: e.target.value }))} placeholder="N° facture (auto si vide)"
-                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
               <input value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="Montant (€)" type="number"
                 className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
               <div>
                 <label className="text-[11px] text-gray-500 mb-1 block">Échéance</label>
-                <input value={form.due_on} onChange={e => setForm(f => ({ ...f, due_on: e.target.value }))} type="date"
+                <input value={form.due_on} onChange={e => setForm(f => ({ ...f, due_on: e.target.value }))} type="date" min={new Date().toISOString().slice(0, 10)}
                   className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-700" />
               </div>
             </div>
-            {error && (
-              <p className="mt-3 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>
+            {(error || dateError) && (
+              <p className="mt-3 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{dateError ?? error}</p>
             )}
             <div className="flex gap-2 mt-6">
               <button onClick={() => setShowCreate(false)} className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Annuler</button>

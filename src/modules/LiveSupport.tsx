@@ -39,10 +39,18 @@ export function LiveSupport() {
   const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
   const resolvedThisWeek = tickets.filter(t => t.status === 'Résolu' && new Date(t.sla_deadline ?? 0).getTime() > oneWeekAgo).length
 
+  function nextTicketNumber() {
+    const maxSeq = tickets.reduce((max, t) => {
+      const match = /^TKT-(\d+)$/.exec(t.number)
+      return match ? Math.max(max, Number(match[1])) : max
+    }, 0)
+    return `TKT-${String(maxSeq + 1).padStart(4, '0')}`
+  }
+
   async function handleCreate() {
     if (!form.subject.trim()) return
     const created = await insert({
-      number: `TKT-${Date.now()}`,
+      number: nextTicketNumber(),
       subject: form.subject.trim(),
       client: form.client.trim() || null,
       assignee: form.assignee.trim() || null,

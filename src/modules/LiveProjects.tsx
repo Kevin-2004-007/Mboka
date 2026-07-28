@@ -29,9 +29,16 @@ export function LiveProjects() {
   const [form, setForm] = useState({ name: '', client: '', budget: '', deadline: '', members_count: '1' })
   const [showLogTime, setShowLogTime] = useState(false)
   const [timeForm, setTimeForm] = useState({ employee_id: '', project_id: '', work_date: new Date().toISOString().slice(0, 10), hours: '' })
+  const [deadlineError, setDeadlineError] = useState<string | null>(null)
+  const [workDateError, setWorkDateError] = useState<string | null>(null)
 
   async function handleCreate() {
     if (!form.name.trim()) return
+    if (form.deadline && form.deadline < new Date().toISOString().slice(0, 10)) {
+      setDeadlineError('La deadline ne peut pas être dans le passé.')
+      return
+    }
+    setDeadlineError(null)
     const created = await insert({
       name: form.name.trim(),
       client: form.client.trim() || null,
@@ -50,6 +57,11 @@ export function LiveProjects() {
 
   async function handleLogTime() {
     if (!timeForm.employee_id || !timeForm.project_id || !timeForm.hours) return
+    if (timeForm.work_date > new Date().toISOString().slice(0, 10)) {
+      setWorkDateError("La date pointée ne peut pas être dans le futur.")
+      return
+    }
+    setWorkDateError(null)
     const created = await insertTime({
       employee_id: timeForm.employee_id,
       project_id: timeForm.project_id,
@@ -198,12 +210,12 @@ export function LiveProjects() {
               </div>
               <div>
                 <label className="text-[11px] text-gray-500 mb-1 block">Deadline</label>
-                <input value={form.deadline} onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))} type="date"
+                <input value={form.deadline} onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))} type="date" min={new Date().toISOString().slice(0, 10)}
                   className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-700" />
               </div>
             </div>
-            {error && (
-              <p className="mt-3 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>
+            {(error || deadlineError) && (
+              <p className="mt-3 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{deadlineError ?? error}</p>
             )}
             <div className="flex gap-2 mt-6">
               <button onClick={() => setShowCreate(false)} className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Annuler</button>
@@ -232,14 +244,14 @@ export function LiveProjects() {
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
               <div className="grid grid-cols-2 gap-3">
-                <input value={timeForm.work_date} onChange={e => setTimeForm(f => ({ ...f, work_date: e.target.value }))} type="date"
+                <input value={timeForm.work_date} onChange={e => setTimeForm(f => ({ ...f, work_date: e.target.value }))} type="date" max={new Date().toISOString().slice(0, 10)}
                   className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-700" />
                 <input value={timeForm.hours} onChange={e => setTimeForm(f => ({ ...f, hours: e.target.value }))} placeholder="Heures" type="number"
                   className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
               </div>
             </div>
-            {timeError && (
-              <p className="mt-3 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{timeError}</p>
+            {(timeError || workDateError) && (
+              <p className="mt-3 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{workDateError ?? timeError}</p>
             )}
             <div className="flex gap-2 mt-6">
               <button onClick={() => setShowLogTime(false)} className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Annuler</button>

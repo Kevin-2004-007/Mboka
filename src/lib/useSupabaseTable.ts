@@ -4,6 +4,22 @@ import { useSupabaseClient } from './supabase'
 
 export type TableRow<T> = T & { id: string; org_id: string; created_at: string }
 
+// Clerk mints a fresh session token roughly once a minute, and every so
+// often Supabase's PostgREST rejects one right after mint with "JWT not yet
+// valid" (PGRST303) even though its `nbf` has already passed by the time the
+// request lands — a few seconds of clock skew between Clerk's and
+// Supabase's infra, not anything wrong with the request itself. Retrying a
+// beat later succeeds once that skew has cleared, so callers don't need to
+// surface this as a real error.
+async function withNbfRetry<T>(run: () => PromiseLike<{ data: T; error: { message: string } | null }>) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const result = await run()
+    if (!result.error || !/not yet valid/i.test(result.error.message)) return result
+    await new Promise(resolve => setTimeout(resolve, 1500))
+  }
+  return run()
+}
+
 // Generic CRUD hook shared by every entity in src/data/*.ts. Fetches all
 // rows of `table` for the active Clerk Organization on mount (and whenever
 // the active org changes) and exposes insert/update/remove helpers that
@@ -24,11 +40,13 @@ export function useSupabaseTable<T extends Record<string, unknown>>(table: strin
       return
     }
     setLoading(true)
-    const { data, error } = await supabase
-      .from(table)
-      .select('*')
-      .eq('org_id', organization.id)
-      .order('created_at', { ascending: true })
+    const { data, error } = await withNbfRetry(() =>
+      supabase
+        .from(table)
+        .select('*')
+        .eq('org_id', organization.id)
+        .order('created_at', { ascending: true }),
+    )
 
     if (error) setError(error.message)
     else {
@@ -77,10 +95,12 @@ export function useSupabaseTable<T extends Record<string, unknown>>(table: strin
     // supabase-js infers insert/update payload types from the (unspecified)
     // Database schema; without generated types that inference fights any
     // externally-supplied generic, so the builder is treated as untyped here.
-    const { data, error } = await (supabase.from(table) as any)
-      .insert({ ...row, org_id: organization.id })
-      .select()
-      .single()
+    const { data, error } = await withNbfRetry(() =>
+      (supabase.from(table) as any)
+        .insert({ ...row, org_id: organization.id })
+        .select()
+        .single(),
+    )
 
     if (error) {
       setError(error.message)
@@ -91,7 +111,7 @@ export function useSupabaseTable<T extends Record<string, unknown>>(table: strin
   }
 
   async function update(id: string, patch: Partial<T>) {
-    const { error } = await (supabase.from(table) as any).update(patch).eq('id', id)
+    const { error } = await withNbfRetry(() => (supabase.from(table) as any).update(patch).eq('id', id))
     if (error) {
       setError(error.message)
       return false
@@ -101,7 +121,7 @@ export function useSupabaseTable<T extends Record<string, unknown>>(table: strin
   }
 
   async function remove(id: string) {
-    const { error } = await supabase.from(table).delete().eq('id', id)
+    const { error } = await withNbfRetry(() => supabase.from(table).delete().eq('id', id))
     if (error) {
       setError(error.message)
       return false

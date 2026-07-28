@@ -6,11 +6,12 @@
 --
 -- Multi-tenancy: every table carries an `org_id text` column holding the
 -- active Clerk Organization id, and Row Level Security restricts every row
--- to `org_id = (auth.jwt() ->> 'org_id')` — the `org_id` claim Clerk puts in
--- the session token whenever an Organization is active. This requires the
--- Clerk <-> Supabase Third-Party Auth integration to be configured first
--- (see .env.local.example for the steps) — without it, auth.jwt() won't
--- carry Clerk's claims and every policy below will simply deny all access.
+-- to `org_id = clerk_org_id()`, which reads the active org id out of the
+-- Clerk session token (see the function's definition below for why it
+-- checks two claim shapes). This requires the Clerk <-> Supabase
+-- Third-Party Auth integration to be configured first (see
+-- .env.local.example for the steps) — without it, auth.jwt() won't carry
+-- Clerk's claims and every policy below will simply deny all access.
 
 create extension if not exists pgcrypto;
 
@@ -20,6 +21,16 @@ begin
   return new;
 end;
 $$ language plpgsql;
+
+-- Clerk's session token has changed shape over time: older tokens carry
+-- flat `org_id` / `org_role` / `org_slug` claims, current ones (token `v: 2`)
+-- nest them under `o: { id, rol, slg }` instead. Reading through this
+-- function instead of a raw `auth.jwt() ->> 'org_id'` means policies keep
+-- working across that change instead of silently resolving to null (which
+-- reads as "no org" and makes every row insert/select get denied by RLS).
+create or replace function clerk_org_id() returns text as $$
+  select coalesce(auth.jwt() -> 'o' ->> 'id', auth.jwt() ->> 'org_id')
+$$ language sql stable;
 
 -- ── RH ──────────────────────────────────────────────────────────────────
 
@@ -36,8 +47,8 @@ create table if not exists employees (
 );
 alter table employees enable row level security;
 create policy "org_isolation" on employees for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 
 create table if not exists leave_requests (
   id uuid primary key default gen_random_uuid(),
@@ -53,8 +64,8 @@ create table if not exists leave_requests (
 );
 alter table leave_requests enable row level security;
 create policy "org_isolation" on leave_requests for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 
 -- ── CRM ─────────────────────────────────────────────────────────────────
 
@@ -70,8 +81,8 @@ create table if not exists deals (
 );
 alter table deals enable row level security;
 create policy "org_isolation" on deals for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 
 -- ── Finance / Comptabilité ─────────────────────────────────────────────
 
@@ -88,8 +99,8 @@ create table if not exists invoices (
 );
 alter table invoices enable row level security;
 create policy "org_isolation" on invoices for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 
 create table if not exists bank_transactions (
   id uuid primary key default gen_random_uuid(),
@@ -103,8 +114,8 @@ create table if not exists bank_transactions (
 );
 alter table bank_transactions enable row level security;
 create policy "org_isolation" on bank_transactions for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 
 -- ── Achats ──────────────────────────────────────────────────────────────
 
@@ -122,8 +133,8 @@ create table if not exists purchase_orders (
 );
 alter table purchase_orders enable row level security;
 create policy "org_isolation" on purchase_orders for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 
 -- ── Stock ───────────────────────────────────────────────────────────────
 -- Note: "status" (En stock / Stock faible / Rupture) is derived client-side
@@ -142,8 +153,8 @@ create table if not exists stock_items (
 );
 alter table stock_items enable row level security;
 create policy "org_isolation" on stock_items for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 
 -- ── Notes de frais ──────────────────────────────────────────────────────
 -- receipt_path points into the shared `attachments` Storage bucket, see below.
@@ -163,8 +174,8 @@ create table if not exists expenses (
 );
 alter table expenses enable row level security;
 create policy "org_isolation" on expenses for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 
 -- ── Projets ─────────────────────────────────────────────────────────────
 
@@ -184,8 +195,8 @@ create table if not exists projects (
 );
 alter table projects enable row level security;
 create policy "org_isolation" on projects for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 
 create table if not exists time_entries (
   id uuid primary key default gen_random_uuid(),
@@ -198,8 +209,8 @@ create table if not exists time_entries (
 );
 alter table time_entries enable row level security;
 create policy "org_isolation" on time_entries for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 
 -- ── Support client ──────────────────────────────────────────────────────
 
@@ -217,8 +228,8 @@ create table if not exists tickets (
 );
 alter table tickets enable row level security;
 create policy "org_isolation" on tickets for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 
 -- ── GED (documents) ─────────────────────────────────────────────────────
 -- storage_path points into the shared `attachments` Storage bucket, see below.
@@ -236,8 +247,8 @@ create table if not exists documents (
 );
 alter table documents enable row level security;
 create policy "org_isolation" on documents for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 create trigger documents_set_updated_at before update on documents
   for each row execute function set_updated_at();
 
@@ -249,12 +260,13 @@ create table if not exists esign_documents (
   title text not null,
   status text not null default 'En attente',
   deadline date,
+  storage_path text,
   created_at timestamptz not null default now()
 );
 alter table esign_documents enable row level security;
 create policy "org_isolation" on esign_documents for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 
 create table if not exists esign_signers (
   id uuid primary key default gen_random_uuid(),
@@ -263,12 +275,56 @@ create table if not exists esign_signers (
   name text not null,
   initials text,
   done boolean not null default false,
+  token uuid not null default gen_random_uuid() unique,
+  -- Set when this signer was picked from the org's members (Clerk user id) —
+  -- lets them sign directly inside the app instead of via the public
+  -- /sign/{token} link, which stays reserved for external signers.
+  user_id text,
   created_at timestamptz not null default now()
 );
 alter table esign_signers enable row level security;
 create policy "org_isolation" on esign_signers for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
+
+-- Lets an external signer (no Clerk session, no org membership) open their
+-- personal /sign/{token} link and sign, without granting them any broader
+-- access. security definer runs as the function owner, bypassing the
+-- org_isolation RLS above — the token itself (an unguessable uuid) is what
+-- limits access, so callers must only ever be able to look up by exact token.
+create or replace function get_esign_signer_by_token(p_token uuid)
+returns table (
+  document_title text,
+  document_deadline date,
+  document_status text,
+  document_storage_path text,
+  signer_id uuid,
+  signer_name text,
+  signer_done boolean
+)
+security definer set search_path = public language sql as $$
+  select d.title, d.deadline, d.status, d.storage_path, s.id, s.name, s.done
+  from esign_signers s join esign_documents d on d.id = s.esign_document_id
+  where s.token = p_token
+$$;
+
+create or replace function sign_esign_by_token(p_token uuid)
+returns void
+security definer set search_path = public language plpgsql as $$
+declare
+  v_doc_id uuid;
+begin
+  update esign_signers set done = true where token = p_token returning esign_document_id into v_doc_id;
+  if v_doc_id is not null and not exists (
+    select 1 from esign_signers where esign_document_id = v_doc_id and done = false
+  ) then
+    update esign_documents set status = 'Signé' where id = v_doc_id;
+  end if;
+end;
+$$;
+
+grant execute on function get_esign_signer_by_token(uuid) to anon, authenticated;
+grant execute on function sign_esign_by_token(uuid) to anon, authenticated;
 
 -- ── Business Intelligence ──────────────────────────────────────────────
 
@@ -286,8 +342,8 @@ create table if not exists bi_reports (
 );
 alter table bi_reports enable row level security;
 create policy "org_isolation" on bi_reports for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 create trigger bi_reports_set_updated_at before update on bi_reports
   for each row execute function set_updated_at();
 
@@ -307,8 +363,8 @@ create table if not exists automations (
 );
 alter table automations enable row level security;
 create policy "org_isolation" on automations for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 
 -- ── Qualité / Conformité ────────────────────────────────────────────────
 
@@ -326,8 +382,8 @@ create table if not exists audits (
 );
 alter table audits enable row level security;
 create policy "org_isolation" on audits for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 
 create table if not exists audit_checklist_items (
   id uuid primary key default gen_random_uuid(),
@@ -341,8 +397,8 @@ create table if not exists audit_checklist_items (
 );
 alter table audit_checklist_items enable row level security;
 create policy "org_isolation" on audit_checklist_items for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 
 -- ── Transverse : notifications, paramètres d'organisation ──────────────
 -- notifications is per-user (user_id = Clerk user id), not just per-org.
@@ -359,8 +415,8 @@ create table if not exists notifications (
 );
 alter table notifications enable row level security;
 create policy "org_isolation" on notifications for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 
 -- Replaces the mboka:activeModules:<orgId> localStorage hack from onboarding.
 create table if not exists org_settings (
@@ -370,9 +426,26 @@ create table if not exists org_settings (
 );
 alter table org_settings enable row level security;
 create policy "org_isolation" on org_settings for all
-  using (org_id = (auth.jwt() ->> 'org_id'))
-  with check (org_id = (auth.jwt() ->> 'org_id'));
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
 create trigger org_settings_set_updated_at before update on org_settings
+  for each row execute function set_updated_at();
+
+-- Per-member module restriction. No row for a (org_id, user_id) pair means
+-- that member sees every module the org has active — a row only exists once
+-- an admin narrows a specific member down to a subset (see LiveSettings.tsx).
+create table if not exists member_module_access (
+  org_id text not null,
+  user_id text not null,
+  modules text[] not null default '{}',
+  updated_at timestamptz not null default now(),
+  primary key (org_id, user_id)
+);
+alter table member_module_access enable row level security;
+create policy "org_isolation" on member_module_access for all
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
+create trigger member_module_access_set_updated_at before update on member_module_access
   for each row execute function set_updated_at();
 
 -- ── Storage (file uploads: documents, expense receipts, audit evidence) ─
@@ -384,5 +457,26 @@ values ('attachments', 'attachments', false)
 on conflict (id) do nothing;
 
 create policy "org_isolation_storage" on storage.objects for all
-  using (bucket_id = 'attachments' and (storage.foldername(name))[1] = (auth.jwt() ->> 'org_id'))
-  with check (bucket_id = 'attachments' and (storage.foldername(name))[1] = (auth.jwt() ->> 'org_id'));
+  using (bucket_id = 'attachments' and (storage.foldername(name))[1] = clerk_org_id())
+  with check (bucket_id = 'attachments' and (storage.foldername(name))[1] = clerk_org_id());
+
+-- Lets an external signer (no org session) fetch the specific file attached
+-- to an e-signature request — scoped to exactly the objects registered as an
+-- esign_documents.storage_path, not the whole attachments bucket, so it
+-- doesn't widen access to other orgs' receipts/documents/etc.
+--
+-- This has to go through a security definer function rather than an inline
+-- `exists (select ... from esign_documents ...)`: a subquery inside an RLS
+-- policy is still evaluated as the calling role, so an anonymous signer
+-- would hit esign_documents' own org_isolation policy and always get zero
+-- rows back (org_id can never equal an anonymous caller's — nonexistent —
+-- org claim). The function runs as its owner, bypassing that RLS, while
+-- still only ever answering "is this exact path a registered esign file?".
+create or replace function is_esign_attachment(p_path text) returns boolean
+security definer set search_path = public language sql as $$
+  select exists (select 1 from esign_documents where storage_path = p_path)
+$$;
+grant execute on function is_esign_attachment(text) to anon, authenticated;
+
+create policy "esign_public_read" on storage.objects for select
+  using (bucket_id = 'attachments' and is_esign_attachment(storage.objects.name));

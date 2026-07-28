@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
-import { X, Bell, CreditCard, UserCheck, AlertTriangle, MessageSquare, Workflow, Target } from 'lucide-react'
+import { X, Bell, CreditCard, UserCheck, AlertTriangle, MessageSquare, Workflow, Target, PenLine } from 'lucide-react'
 import { useNotifications } from '../data/notifications'
+import type { Module } from '../modules'
 
 const moduleIcon: Record<string, { Icon: React.ElementType; color: string }> = {
   Finance: { Icon: CreditCard, color: 'text-indigo-500 bg-indigo-50' },
@@ -9,6 +10,12 @@ const moduleIcon: Record<string, { Icon: React.ElementType; color: string }> = {
   Support: { Icon: MessageSquare, color: 'text-blue-500 bg-blue-50' },
   Automatisations: { Icon: Workflow, color: 'text-purple-500 bg-purple-50' },
   CRM: { Icon: Target, color: 'text-amber-500 bg-amber-50' },
+  'Signature électronique': { Icon: PenLine, color: 'text-indigo-500 bg-indigo-50' },
+}
+
+const moduleLabelToId: Partial<Record<string, Module>> = {
+  Finance: 'finance', RH: 'hr', Stock: 'stock', Support: 'support',
+  Automatisations: 'automations', CRM: 'crm', 'Signature électronique': 'esign',
 }
 
 function timeAgo(value: string) {
@@ -32,7 +39,7 @@ export function LiveUnreadCount({ onChange }: { onChange: (n: number) => void })
   return null
 }
 
-export function LiveNotificationsPanel({ onClose }: { onClose: () => void }) {
+export function LiveNotificationsPanel({ onClose, onNavigate }: { onClose: () => void; onNavigate?: (m: Module) => void }) {
   const { data: notifs, update } = useNotifications()
   const unread = notifs.filter(n => !n.read).length
 
@@ -54,7 +61,11 @@ export function LiveNotificationsPanel({ onClose }: { onClose: () => void }) {
           {notifs.map(n => {
             const { Icon, color } = moduleIcon[n.module ?? ''] ?? { Icon: Bell, color: 'text-gray-500 bg-gray-100' }
             return (
-              <button key={n.id} onClick={() => update(n.id, { read: true })}
+              <button key={n.id} onClick={() => {
+                update(n.id, { read: true })
+                const target = n.module ? moduleLabelToId[n.module] : undefined
+                if (target) { onNavigate?.(target); onClose() }
+              }}
                 className={`w-full flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left ${n.read ? 'opacity-60' : ''}`}>
                 <div className={`w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center ${color}`}>
                   <Icon size={14} />

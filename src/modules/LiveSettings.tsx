@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useOrganization } from '@clerk/react'
-import { Plus, X, PlugZap } from 'lucide-react'
+import { Plus, X, PlugZap, SlidersHorizontal } from 'lucide-react'
 import { StatusBadge, Avatar, TableHeader } from '../App'
 import { navItems, ALWAYS_ON_MODULES, type Module } from '../modules'
 import { useOrgSettings } from '../data/orgSettings'
+import { useMemberModuleAccess } from '../data/memberModuleAccess'
 
 const integrations = [
   { name: 'Stripe Billing', desc: 'Paiements et abonnements', status: 'Non configuré', color: 'text-gray-400 bg-gray-100' },
@@ -18,8 +19,12 @@ function initialsOf(name: string) {
 }
 
 export function LiveSettings() {
-  const { organization, membership, memberships } = useOrganization({ memberships: true })
+  const { organization, membership, memberships, invitations } = useOrganization({
+    memberships: true,
+    invitations: { status: ['pending'] },
+  })
   const { activeModules, loading: settingsLoading, setModules } = useOrgSettings()
+  const { rows: moduleAccessRows, setAccess } = useMemberModuleAccess()
 
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
@@ -28,9 +33,37 @@ export function LiveSettings() {
   const [inviteError, setInviteError] = useState<string | null>(null)
   const [modulesError, setModulesError] = useState<string | null>(null)
   const [settingsTab, setSettingsTab] = useState<'members' | 'modules' | 'integrations'>('members')
+  const [editingAccessId, setEditingAccessId] = useState<string | null>(null)
+  const [editModules, setEditModules] = useState<Module[]>([])
+  const [accessError, setAccessError] = useState<string | null>(null)
+  const [savingAccess, setSavingAccess] = useState(false)
 
   const members = memberships?.data ?? []
+  const pendingInvitations = invitations?.data ?? []
   const selectedModules = activeModules ?? navItems.map(m => m.id)
+  const toggleableModules = navItems.filter(item => !ALWAYS_ON_MODULES.includes(item.id) && selectedModules.includes(item.id))
+
+  function openAccessEditor(userId: string) {
+    const restriction = moduleAccessRows.find(r => r.user_id === userId)
+    setEditModules(restriction ? (restriction.modules as Module[]) : toggleableModules.map(m => m.id))
+    setAccessError(null)
+    setEditingAccessId(userId)
+  }
+
+  async function handleSaveAccess() {
+    if (!editingAccessId) return
+    setSavingAccess(true)
+    setAccessError(null)
+    try {
+      const isFullAccess = toggleableModules.every(m => editModules.includes(m.id))
+      await setAccess(editingAccessId, isFullAccess ? null : editModules)
+      setEditingAccessId(null)
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : "Impossible d'enregistrer ces accès.")
+    } finally {
+      setSavingAccess(false)
+    }
+  }
 
   async function handleInvite() {
     if (!inviteEmail.trim() || !organization) return
@@ -38,6 +71,7 @@ export function LiveSettings() {
     setInviteError(null)
     try {
       await organization.inviteMember({ emailAddress: inviteEmail.trim(), role: inviteRole })
+      await invitations?.revalidate?.()
       setInviteEmail('')
       setShowInvite(false)
     } catch (err) {
@@ -45,6 +79,13 @@ export function LiveSettings() {
     } finally {
       setInviting(false)
     }
+  }
+
+  async function handleRevoke(invitationId: string) {
+    const invitation = pendingInvitations.find(i => i.id === invitationId)
+    if (!invitation || !window.confirm("Révoquer cette invitation ?")) return
+    await invitation.revoke()
+    await invitations?.revalidate?.()
   }
 
   async function toggleModule(id: Module) {
@@ -72,7 +113,10 @@ export function LiveSettings() {
       {settingsTab === 'members' && (
         <>
           <div className="flex items-center justify-between mb-4">
-            <p className="text-xs text-gray-500">{members.length} membre{members.length > 1 ? 's' : ''} dans l'organisation</p>
+            <p className="text-xs text-gray-500">
+              {members.length} membre{members.length > 1 ? 's' : ''} dans l'organisation
+              {pendingInvitations.length > 0 && ` · ${pendingInvitations.length} invitation${pendingInvitations.length > 1 ? 's' : ''} en attente`}
+            </p>
             {membership?.role === 'org:admin' && (
               <button onClick={() => setShowInvite(true)}
                 className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors">
@@ -120,22 +164,85 @@ export function LiveSettings() {
 
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <table className="w-full text-xs">
-              <TableHeader cols={['Membre', 'Email', 'Rôle', 'Statut']} />
+              <TableHeader cols={['Membre', 'Email', 'Rôle', 'Statut', '']} />
               <tbody>
                 {members.map((m, i) => {
                   const name = [m.publicUserData?.firstName, m.publicUserData?.lastName].filter(Boolean).join(' ') || m.publicUserData?.identifier || 'Membre'
+                  const isLast = i === members.length - 1 && pendingInvitations.length === 0
+                  const userId = m.publicUserData?.userId
+                  const restricted = userId ? moduleAccessRows.some(r => r.user_id === userId) : false
                   return (
-                    <tr key={m.id} className={`border-b border-gray-50 hover:bg-gray-50/60 transition-colors ${i === members.length - 1 ? 'border-0' : ''}`}>
+                    <tr key={m.id} className={`border-b border-gray-50 hover:bg-gray-50/60 transition-colors ${isLast ? 'border-0' : ''}`}>
                       <td className="px-4 py-3"><div className="flex items-center gap-2.5"><Avatar initials={initialsOf(name)} size="md" /><span className="font-medium text-gray-900">{name}</span></div></td>
                       <td className="px-4 py-3 text-gray-500">{m.publicUserData?.identifier ?? '—'}</td>
                       <td className="px-4 py-3"><StatusBadge status={m.role === 'org:admin' ? 'Admin' : 'Employé'} /></td>
                       <td className="px-4 py-3"><StatusBadge status="Actif" /></td>
+                      <td className="px-4 py-3">
+                        {membership?.role === 'org:admin' && userId && (
+                          <button onClick={() => openAccessEditor(userId)}
+                            className={`flex items-center gap-1 text-[11px] font-medium transition-colors ${restricted ? 'text-indigo-600' : 'text-gray-400 hover:text-indigo-600'}`}>
+                            <SlidersHorizontal size={11} />{restricted ? 'Modules restreints' : 'Modules'}
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   )
                 })}
+                {pendingInvitations.map((inv, i) => (
+                  <tr key={inv.id} className={`border-b border-gray-50 hover:bg-gray-50/60 transition-colors ${i === pendingInvitations.length - 1 ? 'border-0' : ''}`}>
+                    <td className="px-4 py-3"><div className="flex items-center gap-2.5"><Avatar initials={initialsOf(inv.emailAddress)} size="md" /><span className="font-medium text-gray-400 italic">Invitation envoyée</span></div></td>
+                    <td className="px-4 py-3 text-gray-500">{inv.emailAddress}</td>
+                    <td className="px-4 py-3"><StatusBadge status={inv.role === 'org:admin' ? 'Admin' : 'Employé'} /></td>
+                    <td className="px-4 py-3"><StatusBadge status="En attente" /></td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => handleRevoke(inv.id)} className="text-[11px] text-gray-400 hover:text-red-500 transition-colors">Révoquer</button>
+                    </td>
+                  </tr>
+                ))}
+                {members.length === 0 && pendingInvitations.length === 0 && (
+                  <tr><td colSpan={5} className="px-4 py-10 text-center text-gray-400">Aucun membre pour l'instant.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
+
+          {editingAccessId && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setEditingAccessId(null)}>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 m-4" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-sm font-semibold text-gray-900">Modules accessibles</h3>
+                  <button onClick={() => setEditingAccessId(null)} className="p-1 rounded-lg hover:bg-gray-100 transition-colors"><X size={16} className="text-gray-400" /></button>
+                </div>
+                <p className="text-[11px] text-gray-400 mb-4">Dashboard et Paramètres restent toujours accessibles. Tout cocher revient à ne poser aucune restriction.</p>
+                <div className="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto">
+                  {toggleableModules.map(item => {
+                    const checked = editModules.includes(item.id)
+                    return (
+                      <button key={item.id}
+                        onClick={() => setEditModules(prev => checked ? prev.filter(m => m !== item.id) : [...prev, item.id])}
+                        className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-left transition-colors ${checked ? 'border-indigo-200 bg-indigo-50' : 'border-gray-100 hover:bg-gray-50'}`}>
+                        <item.Icon size={14} className={checked ? 'text-indigo-500' : 'text-gray-400'} />
+                        <span className="text-xs text-gray-700 flex-1 truncate">{item.label}</span>
+                        <span className={`w-8 h-4 rounded-full transition-colors flex items-center ${checked ? 'bg-indigo-500' : 'bg-gray-200'}`}>
+                          <span className={`w-3 h-3 rounded-full bg-white shadow-sm transition-transform mx-0.5 ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+                {accessError && (
+                  <p className="mt-3 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{accessError}</p>
+                )}
+                <div className="flex gap-2 mt-6">
+                  <button onClick={() => setEditingAccessId(null)} className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Annuler</button>
+                  <button onClick={handleSaveAccess} disabled={savingAccess}
+                    className="flex-1 px-3 py-2 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                    {savingAccess ? 'Enregistrement…' : 'Enregistrer'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 

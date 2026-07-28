@@ -41,12 +41,15 @@ import { LiveDocuments } from './modules/LiveDocuments'
 import { LiveESign } from './modules/LiveESign'
 import { LiveSettings } from './modules/LiveSettings'
 import { useOrgSettings } from './data/orgSettings'
+import { useMemberModuleAccess } from './data/memberModuleAccess'
 import { LiveBI } from './modules/LiveBI'
 import { LiveAutomations } from './modules/LiveAutomations'
 import { LiveQuality } from './modules/LiveQuality'
 import { LiveUnreadCount, LiveNotificationsPanel } from './modules/LiveNotifications'
 import { LiveCmdKModal } from './modules/LiveCmdKModal'
 import { NotificationRules } from './modules/NotificationRules'
+import { isSupabaseConfigured } from './lib/supabase'
+import { SupabaseSetupNotice } from './auth/SupabaseSetupNotice'
 
 // ── Data ────────────────────────────────────────────────────────────────────
 
@@ -2335,7 +2338,9 @@ function Workspace({
           : <CmdKModal onClose={() => setShowSearch(false)} onNavigate={(m) => { setActiveModule(m); setShowSearch(false) }} />
       )}
       {live && <LiveUnreadCount onChange={setLiveUnread} />}
-      {showNotifs && (live ? <LiveNotificationsPanel onClose={() => setShowNotifs(false)} /> : <NotificationsPanel onClose={() => setShowNotifs(false)} />)}
+      {showNotifs && (live
+        ? <LiveNotificationsPanel onClose={() => setShowNotifs(false)} onNavigate={setActiveModule} />
+        : <NotificationsPanel onClose={() => setShowNotifs(false)} />)}
 
       <Sidebar
         active={activeModule} onNavigate={setActiveModule} onSearch={() => setShowSearch(true)}
@@ -2405,6 +2410,7 @@ function AuthedWorkspace() {
   const { organization, membership } = useOrganization()
   const { signOut } = useClerk()
   const { activeModules } = useOrgSettings()
+  const { rows: moduleAccessRows } = useMemberModuleAccess()
   const [showOrgSwitch, setShowOrgSwitch] = useState(false)
   const [creatingOrg, setCreatingOrg] = useState(false)
 
@@ -2413,9 +2419,16 @@ function AuthedWorkspace() {
   }
 
   const allModuleIds = navItems.map(m => m.id)
-  const visibleModules = activeModules
+  const orgVisibleModules = activeModules
     ? Array.from(new Set([...activeModules, ...ALWAYS_ON_MODULES])) as Module[]
     : allModuleIds
+
+  // No restriction row for this member -> they see every module the org has
+  // active (see useMemberModuleAccess); a row narrows that down further.
+  const myAccess = user ? moduleAccessRows.find(r => r.user_id === user.id) : undefined
+  const visibleModules = myAccess
+    ? Array.from(new Set([...myAccess.modules, ...ALWAYS_ON_MODULES])).filter(m => orgVisibleModules.includes(m as Module)) as Module[]
+    : orgVisibleModules
 
   return (
     <>
@@ -2447,9 +2460,13 @@ export default function App() {
 
   return (
     <Show when="signed-in" fallback={<LoginScreen onDemo={() => setDemoMode(true)} />}>
-      <OrgGate>
-        <AuthedWorkspace />
-      </OrgGate>
+      {isSupabaseConfigured ? (
+        <OrgGate>
+          <AuthedWorkspace />
+        </OrgGate>
+      ) : (
+        <SupabaseSetupNotice onDemo={() => setDemoMode(true)} />
+      )}
     </Show>
   )
 }

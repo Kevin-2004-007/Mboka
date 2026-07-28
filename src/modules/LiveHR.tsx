@@ -21,7 +21,8 @@ export function LiveHR() {
   const [showCreate, setShowCreate] = useState(false)
   const [newEmployee, setNewEmployee] = useState({ name: '', role: '', dept: 'RH', contract: 'CDI' })
 
-  const { data: employees, loading, error, insert } = useEmployees()
+  const [menuId, setMenuId] = useState<string | null>(null)
+  const { data: employees, loading, error, insert, update, remove } = useEmployees()
   const { data: leaveRequests, update: updateLeave } = useLeaveRequests()
 
   const depts = ['Tous', 'RH', 'Tech', 'Finance', 'Commercial']
@@ -41,6 +42,17 @@ export function LiveHR() {
 
   function employeeName(id: string | null) {
     return employees.find(e => e.id === id)?.name ?? 'Employé supprimé'
+  }
+
+  async function handleDelete(id: string) {
+    setMenuId(null)
+    if (!window.confirm('Supprimer cet employé ?')) return
+    await remove(id)
+  }
+
+  async function handleToggleStatus(id: string, current: string) {
+    setMenuId(null)
+    await update(id, { status: current === 'Actif' ? 'Inactif' : 'Actif' })
   }
 
   return (
@@ -121,7 +133,24 @@ export function LiveHR() {
                     <td className="px-4 py-3 text-gray-600">{emp.contract}</td>
                     <td className="px-4 py-3"><StatusBadge status={emp.status} /></td>
                     <td className="px-4 py-3 text-gray-400">{formatDate(emp.hire_date)}</td>
-                    <td className="px-4 py-3"><button className="p-1 rounded hover:bg-gray-100 transition-colors"><MoreHorizontal size={14} className="text-gray-400" /></button></td>
+                    <td className="px-4 py-3 relative">
+                      <button onClick={() => setMenuId(menuId === emp.id ? null : emp.id)} className="p-1 rounded hover:bg-gray-100 transition-colors">
+                        <MoreHorizontal size={14} className="text-gray-400" />
+                      </button>
+                      {menuId === emp.id && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setMenuId(null)} />
+                          <div className="absolute right-4 top-9 z-20 bg-white rounded-lg shadow-lg border border-gray-100 py-1 w-40 text-left">
+                            <button onClick={() => handleToggleStatus(emp.id, emp.status)} className="w-full text-left px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50 transition-colors">
+                              {emp.status === 'Actif' ? 'Marquer inactif' : 'Marquer actif'}
+                            </button>
+                            <button onClick={() => handleDelete(emp.id)} className="w-full text-left px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 transition-colors">
+                              Supprimer
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {loading && <TableSkeleton cols={7} />}

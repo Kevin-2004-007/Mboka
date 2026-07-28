@@ -24,12 +24,18 @@ export function LiveQuality() {
   const [form, setForm] = useState({ title: '', type: auditTypes[0], assignee: '', deadline: '' })
   const [checklistDraft, setChecklistDraft] = useState('')
   const [checklistItems, setChecklistItems] = useState<string[]>([])
+  const [dateError, setDateError] = useState<string | null>(null)
 
   const selected = audits.find(a => a.id === selectedId) ?? null
   const selectedItems = selected ? items.filter(i => i.audit_id === selected.id) : []
 
   async function handleCreate() {
     if (!form.title.trim()) return
+    if (form.deadline && form.deadline < new Date().toISOString().slice(0, 10)) {
+      setDateError("L'échéance ne peut pas être dans le passé.")
+      return
+    }
+    setDateError(null)
     const audit = await insertAudit({
       title: form.title.trim(),
       type: form.type,
@@ -217,7 +223,7 @@ export function LiveQuality() {
               </div>
               <div>
                 <label className="text-[11px] text-gray-500 mb-1 block">Échéance</label>
-                <input value={form.deadline} onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))} type="date"
+                <input value={form.deadline} onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))} type="date" min={new Date().toISOString().slice(0, 10)}
                   className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-gray-700" />
               </div>
               <label className="text-[11px] text-gray-500 mb-1 block">Points de contrôle</label>
@@ -236,8 +242,8 @@ export function LiveQuality() {
                   className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"><Plus size={14} className="text-gray-500" /></button>
               </div>
             </div>
-            {error && (
-              <p className="mt-3 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>
+            {(error || dateError) && (
+              <p className="mt-3 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{dateError ?? error}</p>
             )}
             <div className="flex gap-2 mt-6">
               <button onClick={() => setShowCreate(false)} className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Annuler</button>

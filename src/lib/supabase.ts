@@ -22,3 +22,11 @@ export function useSupabaseClient() {
     [session],
   )
 }
+
+// Plain, unauthenticated client for public pages with no Clerk session (e.g.
+// /sign/{token} — an external signer isn't an org member). RLS still applies;
+// access is limited to what the security-definer RPCs and the dedicated
+// "esign_public_read" storage policy expose (see supabase/schema.sql).
+export function createPublicSupabaseClient() {
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+}

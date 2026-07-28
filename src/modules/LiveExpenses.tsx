@@ -36,6 +36,14 @@ export function LiveExpenses() {
   const pendingCount = expenses.filter(e => e.status === 'Soumise').length
   const totalReimbursed = expenses.filter(e => e.status === 'Remboursée').reduce((s, e) => s + Number(e.amount), 0)
 
+  function nextExpenseNumber() {
+    const maxSeq = expenses.reduce((max, e) => {
+      const match = /^NF-(\d+)$/.exec(e.number)
+      return match ? Math.max(max, Number(match[1])) : max
+    }, 0)
+    return `NF-${String(maxSeq + 1).padStart(4, '0')}`
+  }
+
   async function handleDownload(path: string) {
     const { data } = await supabase.storage.from('attachments').createSignedUrl(path, 60)
     if (data?.signedUrl) window.open(data.signedUrl, '_blank')
@@ -56,7 +64,7 @@ export function LiveExpenses() {
       }
     }
     const created = await insert({
-      number: `NF-${Date.now()}`,
+      number: nextExpenseNumber(),
       category,
       amount: Number(amount) || 0,
       spent_on: new Date().toISOString().slice(0, 10),
