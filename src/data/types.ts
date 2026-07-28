@@ -118,6 +118,7 @@ export type EsignDocument = {
   status: string
   deadline: string | null
   storage_path: string | null
+  created_by: string | null
 }
 
 export type EsignSigner = {

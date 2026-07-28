@@ -107,7 +107,7 @@ export function LiveESign() {
       }
     }
 
-    const doc = await insertDoc({ title: title.trim(), status: 'En attente', deadline: deadline || null, storage_path: storagePath })
+    const doc = await insertDoc({ title: title.trim(), status: 'En attente', deadline: deadline || null, storage_path: storagePath, created_by: user?.id ?? null })
     setCreating(false)
     if (!doc) return
 

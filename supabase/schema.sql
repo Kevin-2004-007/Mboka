@@ -32,6 +32,12 @@ create or replace function clerk_org_id() returns text as $$
   select coalesce(auth.jwt() -> 'o' ->> 'id', auth.jwt() ->> 'org_id')
 $$ language sql stable;
 
+-- Same claim-shape fallback as clerk_org_id(), for the caller's role
+-- within the active org ('admin' or 'member').
+create or replace function clerk_org_role() returns text as $$
+  select coalesce(auth.jwt() -> 'o' ->> 'rol', auth.jwt() ->> 'org_role')
+$$ language sql stable;
+
 -- ── RH ──────────────────────────────────────────────────────────────────
 
 create table if not exists employees (
@@ -261,12 +267,12 @@ create table if not exists esign_documents (
   status text not null default 'En attente',
   deadline date,
   storage_path text,
+  -- Clerk user id of whoever created the request — lets them keep seeing
+  -- it even if they're not one of the signers (see select policy below).
+  created_by text,
   created_at timestamptz not null default now()
 );
 alter table esign_documents enable row level security;
-create policy "org_isolation" on esign_documents for all
-  using (org_id = clerk_org_id())
-  with check (org_id = clerk_org_id());
 
 create table if not exists esign_signers (
   id uuid primary key default gen_random_uuid(),
@@ -283,9 +289,46 @@ create table if not exists esign_signers (
   created_at timestamptz not null default now()
 );
 alter table esign_signers enable row level security;
-create policy "org_isolation" on esign_signers for all
-  using (org_id = clerk_org_id())
-  with check (org_id = clerk_org_id());
+
+-- security definer so these checks don't recurse back through the other
+-- table's own RLS (a plain subquery in a policy is still evaluated as the
+-- calling role, which would hit that table's select policy too).
+create or replace function is_esign_signer(p_doc_id uuid, p_user_id text) returns boolean
+security definer set search_path = public language sql as $$
+  select exists (select 1 from esign_signers where esign_document_id = p_doc_id and user_id = p_user_id)
+$$;
+create or replace function is_esign_creator(p_doc_id uuid, p_user_id text) returns boolean
+security definer set search_path = public language sql as $$
+  select exists (select 1 from esign_documents where id = p_doc_id and created_by = p_user_id)
+$$;
+grant execute on function is_esign_signer(uuid, text) to authenticated;
+grant execute on function is_esign_creator(uuid, text) to authenticated;
+
+-- Only admins, the request's creator, and its signers can see a given
+-- e-signature request — everyone else in the org used to see every
+-- document regardless of relevance (e.g. an employee's salary letter
+-- visible to unrelated coworkers). Writes stay org-wide: creating a
+-- request, and a signer flipping the shared doc status to "Signé" on the
+-- last signature, both need to work for any org member.
+create policy "select_admin_creator_or_signer" on esign_documents for select
+  using (org_id = clerk_org_id() and (
+    clerk_org_role() = 'admin' or
+    created_by = (auth.jwt() ->> 'sub') or
+    is_esign_signer(id, auth.jwt() ->> 'sub')
+  ));
+create policy "write_org_members" on esign_documents for insert with check (org_id = clerk_org_id());
+create policy "update_org_members" on esign_documents for update using (org_id = clerk_org_id());
+create policy "delete_org_members" on esign_documents for delete using (org_id = clerk_org_id());
+
+create policy "select_admin_creator_or_cosigner" on esign_signers for select
+  using (org_id = clerk_org_id() and (
+    clerk_org_role() = 'admin' or
+    is_esign_creator(esign_document_id, auth.jwt() ->> 'sub') or
+    is_esign_signer(esign_document_id, auth.jwt() ->> 'sub')
+  ));
+create policy "write_org_members" on esign_signers for insert with check (org_id = clerk_org_id());
+create policy "update_org_members" on esign_signers for update using (org_id = clerk_org_id());
+create policy "delete_org_members" on esign_signers for delete using (org_id = clerk_org_id());
 
 -- Lets an external signer (no Clerk session, no org membership) open their
 -- personal /sign/{token} link and sign, without granting them any broader
