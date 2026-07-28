@@ -1,0 +1,12 @@
+[build]
+  command = "pnpm build"
+  publish = "dist"
+
+# Single-page app: every path must serve index.html so client-side routing
+# (e.g. /sign/{token} in src/main.tsx) can read window.location itself —
+# without this, a direct visit to /sign/... 404s at the server instead of
+# reaching React.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
