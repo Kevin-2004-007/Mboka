@@ -12,7 +12,9 @@ export function useInvitationTicket() {
   return ticket
 }
 
-type State = 'working' | 'needs-name' | 'done' | 'error'
+type State = 'working' | 'needs-info' | 'done' | 'error'
+
+const KNOWN_FIELDS = ['first_name', 'last_name', 'password', 'legal_accepted', 'username'] as const
 
 // Handles an org invitation link entirely inside MBOKA instead of Clerk's
 // hosted Account Portal — the Account Portal redirect depends on Clerk
@@ -25,9 +27,19 @@ export function AcceptInvitationScreen({ ticket }: { ticket: string }) {
   const { signIn } = useSignIn()
   const [state, setState] = useState<State>('working')
   const [message, setMessage] = useState<string | null>(null)
+  const [missingFields, setMissingFields] = useState<string[]>([])
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [password, setPassword] = useState('')
+  const [username, setUsername] = useState('')
+  const [legalAccepted, setLegalAccepted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+
+  function reportUnexpectedStatus() {
+    const fields = signUp.missingFields.length ? ` (${signUp.missingFields.join(', ')})` : ''
+    setState('error')
+    setMessage(`Statut inattendu : ${signUp.status}${fields}. Contactez la personne qui vous a invité.`)
+  }
 
   useEffect(() => {
     // The ticket is single-use server-side, so React StrictMode's double-
@@ -44,16 +56,14 @@ export function AcceptInvitationScreen({ ticket }: { ticket: string }) {
           if (!cancelled) setState('done')
           return
         }
-        // Most common case: the instance requires first/last name, which a
-        // bare ticket doesn't supply — collect it here instead of failing.
         if (signUp.status === 'missing_requirements') {
-          if (!cancelled) setState('needs-name')
+          if (!cancelled) {
+            setMissingFields(signUp.missingFields)
+            setState('needs-info')
+          }
           return
         }
-        if (!cancelled) {
-          setState('error')
-          setMessage(`Statut inattendu (${signUp.status}). Contactez la personne qui vous a invité.`)
-        }
+        if (!cancelled) reportUnexpectedStatus()
         return
       }
 
@@ -91,10 +101,17 @@ export function AcceptInvitationScreen({ ticket }: { ticket: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticket])
 
-  async function handleSubmitName() {
-    if (!firstName.trim() || !lastName.trim()) return
+  const unrecognizedFields = missingFields.filter(f => !(KNOWN_FIELDS as readonly string[]).includes(f))
+
+  async function handleSubmitInfo() {
     setSubmitting(true)
-    const { error } = await signUp.update({ firstName: firstName.trim(), lastName: lastName.trim() })
+    const { error } = await signUp.update({
+      ...(missingFields.includes('first_name') && { firstName: firstName.trim() }),
+      ...(missingFields.includes('last_name') && { lastName: lastName.trim() }),
+      ...(missingFields.includes('password') && { password }),
+      ...(missingFields.includes('username') && { username: username.trim() }),
+      ...(missingFields.includes('legal_accepted') && { legalAccepted }),
+    })
     setSubmitting(false)
     if (error) {
       setState('error')
@@ -104,11 +121,22 @@ export function AcceptInvitationScreen({ ticket }: { ticket: string }) {
     if (signUp.status === 'complete') {
       await signUp.finalize()
       setState('done')
+    } else if (signUp.status === 'missing_requirements') {
+      // Clerk revealed more requirements after this round — loop back with
+      // the updated list rather than dead-ending on stale fields.
+      setMissingFields(signUp.missingFields)
     } else {
-      setState('error')
-      setMessage(`Statut inattendu (${signUp.status}). Contactez la personne qui vous a invité.`)
+      reportUnexpectedStatus()
     }
   }
+
+  const canSubmit =
+    (!missingFields.includes('first_name') || firstName.trim()) &&
+    (!missingFields.includes('last_name') || lastName.trim()) &&
+    (!missingFields.includes('password') || password) &&
+    (!missingFields.includes('username') || username.trim()) &&
+    (!missingFields.includes('legal_accepted') || legalAccepted) &&
+    unrecognizedFields.length === 0
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F9FAFB] p-6">
@@ -120,15 +148,38 @@ export function AcceptInvitationScreen({ ticket }: { ticket: string }) {
             <p className="text-xs text-gray-500">Traitement de votre invitation…</p>
           </>
         )}
-        {state === 'needs-name' && (
+        {state === 'needs-info' && (
           <div className="text-left">
             <p className="text-xs text-gray-500 mb-4 text-center">Encore une étape pour rejoindre l'organisation</p>
             <div className="space-y-3">
-              <input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Prénom"
-                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
-              <input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Nom"
-                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
-              <button onClick={handleSubmitName} disabled={submitting || !firstName.trim() || !lastName.trim()}
+              {missingFields.includes('first_name') && (
+                <input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Prénom"
+                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
+              )}
+              {missingFields.includes('last_name') && (
+                <input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Nom"
+                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
+              )}
+              {missingFields.includes('username') && (
+                <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Nom d'utilisateur"
+                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
+              )}
+              {missingFields.includes('password') && (
+                <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Mot de passe" type="password"
+                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
+              )}
+              {missingFields.includes('legal_accepted') && (
+                <label className="flex items-center gap-2 text-[11px] text-gray-600">
+                  <input type="checkbox" checked={legalAccepted} onChange={e => setLegalAccepted(e.target.checked)} />
+                  J'accepte les conditions d'utilisation
+                </label>
+              )}
+              {unrecognizedFields.length > 0 && (
+                <p className="text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                  Champs non pris en charge par cette page : {unrecognizedFields.join(', ')}.
+                </p>
+              )}
+              <button onClick={handleSubmitInfo} disabled={submitting || !canSubmit}
                 className="w-full py-2.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors">
                 {submitting ? 'Validation…' : 'Continuer'}
               </button>
