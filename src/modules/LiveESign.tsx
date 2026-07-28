@@ -26,8 +26,18 @@ function fileKind(path: string): 'pdf' | 'image' | 'other' {
   return 'other'
 }
 
+// "Expiré" used to only ever be set by the admin clicking "Annuler la
+// demande" — the deadline passing didn't actually do anything. Derived here
+// (like Stock's En stock/Stock faible/Rupture) instead of written back by a
+// background job, since there's no scheduler in this app to run one.
+function effectiveStatus(doc: { status: string; deadline: string | null }) {
+  if (doc.status === 'Signé' || doc.status === 'Expiré') return doc.status
+  if (doc.deadline && doc.deadline < new Date().toISOString().slice(0, 10)) return 'Expiré'
+  return doc.status
+}
+
 export function LiveESign() {
-  const { data: docs, loading, error, insert: insertDoc, update: updateDoc } = useEsignDocuments()
+  const { data: docs, loading, error, insert: insertDoc, update: updateDoc, remove: removeDoc } = useEsignDocuments()
   const { data: signers, insert: insertSigner, update: updateSigner } = useEsignSigners()
   const { insert: insertNotification } = useNotifications()
   const { organization, memberships } = useOrganization({ memberships: true })
@@ -55,7 +65,7 @@ export function LiveESign() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const statuses = ['Tous', 'En attente', 'Signé', 'Expiré']
-  const filtered = docs.filter(d => statusFilter === 'Tous' || d.status === statusFilter)
+  const filtered = docs.filter(d => statusFilter === 'Tous' || effectiveStatus(d) === statusFilter)
   const selected = docs.find(d => d.id === selectedId) ?? null
   const selectedSigners = selected ? signers.filter(s => s.esign_document_id === selected.id) : []
 
@@ -148,8 +158,16 @@ export function LiveESign() {
     await updateDoc(selected.id, { status: 'Expiré' })
   }
 
+  async function handleDeleteDoc(id: string) {
+    if (!window.confirm('Supprimer définitivement cette demande de signature ?')) return
+    await removeDoc(id)
+    if (selectedId === id) setSelectedId(null)
+  }
+
   if (selected) {
     const signedCount = selectedSigners.filter(s => s.done).length
+    const status = effectiveStatus(selected)
+    const isExpired = status === 'Expiré'
     return (
       <div className="p-6 max-w-5xl">
         <button onClick={() => setSelectedId(null)} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 mb-5 transition-colors">
@@ -187,7 +205,7 @@ export function LiveESign() {
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <p className="text-xs font-semibold text-gray-700 mb-3">Statut du document</p>
               <div className="flex items-center gap-2 mb-4">
-                <StatusBadge status={selected.status} />
+                <StatusBadge status={status} />
                 <span className="text-xs text-gray-400">· {signedCount}/{selectedSigners.length} signé{signedCount > 1 ? 's' : ''}</span>
               </div>
               <div className="space-y-3">
@@ -198,11 +216,13 @@ export function LiveESign() {
                       <Avatar initials={s.initials ?? '?'} size="md" />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-900">{s.name}{isMe && !s.done ? ' (vous)' : ''}</p>
-                        <p className={`text-[11px] ${s.done ? 'text-green-600' : 'text-amber-500'}`}>{s.done ? 'A signé' : s.user_id ? 'Notifié·e dans l\'app' : 'En attente'}</p>
+                        <p className={`text-[11px] ${s.done ? 'text-green-600' : isExpired ? 'text-red-500' : 'text-amber-500'}`}>
+                          {s.done ? 'A signé' : isExpired ? 'Expiré' : s.user_id ? 'Notifié·e dans l\'app' : 'En attente'}
+                        </p>
                       </div>
                       {s.done ? (
                         <CheckCircle size={14} className="text-green-500" />
-                      ) : isMe ? (
+                      ) : isExpired ? null : isMe ? (
                         <button onClick={() => toggleSigner(s.id)}
                           className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-600 text-white text-[11px] font-medium rounded-lg hover:bg-indigo-700 transition-colors">
                           <PenLine size={11} />Signer
@@ -231,15 +251,19 @@ export function LiveESign() {
               <p className="text-[10px] text-gray-300 mt-3">Les membres sont notifiés dans l'app et signent directement ici. Pour un externe, envoyez-lui son lien.</p>
             </div>
 
-            {selected.status !== 'Signé' && (
-              <div className="bg-white rounded-xl border border-gray-100 p-4">
-                <p className="text-xs font-semibold text-gray-700 mb-3">Actions</p>
+            <div className="bg-white rounded-xl border border-gray-100 p-4 space-y-2">
+              <p className="text-xs font-semibold text-gray-700 mb-1">Actions</p>
+              {status === 'En attente' && (
                 <button onClick={handleCancel}
                   className="w-full flex items-center justify-center gap-1.5 py-2 border border-red-100 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors">
                   <X size={12} />Annuler la demande
                 </button>
-              </div>
-            )}
+              )}
+              <button onClick={() => handleDeleteDoc(selected.id)}
+                className="w-full flex items-center justify-center gap-1.5 py-2 border border-gray-200 text-gray-500 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors">
+                <Trash2 size={12} />Supprimer définitivement
+              </button>
+            </div>
 
             <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
               <p className="text-xs font-semibold text-amber-800 mb-1">Échéance</p>
@@ -255,9 +279,9 @@ export function LiveESign() {
     <div className="p-6">
       <div className="grid grid-cols-3 gap-4 mb-6">
         {[
-          { label: 'En attente de signature', value: String(docs.filter(d => d.status === 'En attente').length), color: 'text-amber-600' },
-          { label: 'Signés', value: String(docs.filter(d => d.status === 'Signé').length), color: 'text-green-600' },
-          { label: 'Expirés', value: String(docs.filter(d => d.status === 'Expiré').length), color: 'text-red-600' },
+          { label: 'En attente de signature', value: String(docs.filter(d => effectiveStatus(d) === 'En attente').length), color: 'text-amber-600' },
+          { label: 'Signés', value: String(docs.filter(d => effectiveStatus(d) === 'Signé').length), color: 'text-green-600' },
+          { label: 'Expirés', value: String(docs.filter(d => effectiveStatus(d) === 'Expiré').length), color: 'text-red-600' },
         ].map(s => (
           <div key={s.label} className="bg-white rounded-xl border border-gray-100 px-5 py-4">
             <p className="text-xs text-gray-500">{s.label}</p>
@@ -300,8 +324,15 @@ export function LiveESign() {
                       <span className="text-[10px] text-gray-400 ml-1">{docSigners.filter(s => s.done).length}/{docSigners.length}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3"><StatusBadge status={doc.status} /></td>
-                  <td className="px-4 py-3"><ChevronRight size={14} className="text-gray-300" /></td>
+                  <td className="px-4 py-3"><StatusBadge status={effectiveStatus(doc)} /></td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2 justify-end">
+                      <button onClick={e => { e.stopPropagation(); handleDeleteDoc(doc.id) }} className="p-1 rounded hover:bg-red-50 transition-colors">
+                        <Trash2 size={13} className="text-gray-300 hover:text-red-400" />
+                      </button>
+                      <ChevronRight size={14} className="text-gray-300" />
+                    </div>
+                  </td>
                 </tr>
               )
             })}
