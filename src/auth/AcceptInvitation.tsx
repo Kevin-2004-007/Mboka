@@ -34,6 +34,7 @@ export function AcceptInvitationScreen({ ticket }: { ticket: string }) {
   const [username, setUsername] = useState('')
   const [legalAccepted, setLegalAccepted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   function reportUnexpectedStatus() {
     const fields = signUp.missingFields.length ? ` (${signUp.missingFields.join(', ')})` : ''
@@ -105,6 +106,7 @@ export function AcceptInvitationScreen({ ticket }: { ticket: string }) {
 
   async function handleSubmitInfo() {
     setSubmitting(true)
+    setFormError(null)
     const { error } = await signUp.update({
       ...(missingFields.includes('first_name') && { firstName: firstName.trim() }),
       ...(missingFields.includes('last_name') && { lastName: lastName.trim() }),
@@ -114,8 +116,10 @@ export function AcceptInvitationScreen({ ticket }: { ticket: string }) {
     })
     setSubmitting(false)
     if (error) {
-      setState('error')
-      setMessage(error.longMessage ?? error.message)
+      // Stay on the form (e.g. a weak password) instead of dead-ending on
+      // a terminal error screen with no way to correct and retry.
+      setFormError(error.longMessage ?? error.message)
+      if (missingFields.includes('password')) setPassword('')
       return
     }
     if (signUp.status === 'complete') {
@@ -178,6 +182,9 @@ export function AcceptInvitationScreen({ ticket }: { ticket: string }) {
                 <p className="text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
                   Champs non pris en charge par cette page : {unrecognizedFields.join(', ')}.
                 </p>
+              )}
+              {formError && (
+                <p className="text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{formError}</p>
               )}
               <button onClick={handleSubmitInfo} disabled={submitting || !canSubmit}
                 className="w-full py-2.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-40 transition-colors">
