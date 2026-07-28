@@ -50,6 +50,7 @@ import { LiveCmdKModal } from './modules/LiveCmdKModal'
 import { NotificationRules } from './modules/NotificationRules'
 import { isSupabaseConfigured } from './lib/supabase'
 import { SupabaseSetupNotice } from './auth/SupabaseSetupNotice'
+import { useInvitationTicket, AcceptInvitationScreen } from './auth/AcceptInvitation'
 
 // ── Data ────────────────────────────────────────────────────────────────────
 
@@ -2453,13 +2454,18 @@ function AuthedWorkspace() {
 
 export default function App() {
   const [demoMode, setDemoMode] = useState(false)
+  const invitationTicket = useInvitationTicket()
 
   if (!isClerkConfigured || demoMode) {
     return <Workspace />
   }
 
+  const fallback = invitationTicket
+    ? <AcceptInvitationScreen ticket={invitationTicket} />
+    : <LoginScreen onDemo={() => setDemoMode(true)} />
+
   return (
-    <Show when="signed-in" fallback={<LoginScreen onDemo={() => setDemoMode(true)} />}>
+    <Show when="signed-in" fallback={fallback}>
       {isSupabaseConfigured ? (
         <OrgGate>
           <AuthedWorkspace />
