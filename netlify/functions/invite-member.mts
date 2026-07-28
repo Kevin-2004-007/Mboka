@@ -1,4 +1,5 @@
 import { createClerkClient, verifyToken } from '@clerk/backend'
+import { isClerkAPIResponseError } from '@clerk/backend/errors'
 
 // Runs server-side only (Netlify Function) — this is the one place in the
 // project allowed to hold CLERK_SECRET_KEY, since Clerk's Backend API is
@@ -65,7 +66,12 @@ export default async (req: Request) => {
       headers: { 'content-type': 'application/json' },
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Impossible d'envoyer l'invitation."
+    // ClerkAPIResponseError's top-level .message is a generic HTTP status
+    // string (e.g. "Bad Request") — the actionable detail is in .errors.
+    const message = isClerkAPIResponseError(err)
+      ? err.errors.map(e => e.longMessage ?? e.message).join(' ')
+      : err instanceof Error ? err.message : "Impossible d'envoyer l'invitation."
+    console.error('invite-member failed:', JSON.stringify(err))
     return new Response(JSON.stringify({ error: message }), { status: 500 })
   }
 }
