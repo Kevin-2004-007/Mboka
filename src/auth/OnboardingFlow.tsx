@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useOrganizationList, useOrganization } from '@clerk/react'
+import { useOrganizationList, useOrganization, useSession } from '@clerk/react'
 import { CheckCircle, Trash2, Plus, Building2 } from 'lucide-react'
 import { navItems, ALWAYS_ON_MODULES, type Module } from '../modules'
 import { isSupabaseConfigured } from '../lib/supabase'
@@ -38,6 +38,7 @@ function StepHeader({ current }: { current: number }) {
 export function OnboardingFlow({ onFinish, onCancel }: { onFinish: () => void; onCancel?: () => void }) {
   const { createOrganization, setActive } = useOrganizationList()
   const { organization } = useOrganization()
+  const { session } = useSession()
   const { setModules: persistActiveModules } = useOrgSettings()
 
   const [step, setStep] = useState(1)
@@ -48,6 +49,7 @@ export function OnboardingFlow({ onFinish, onCancel }: { onFinish: () => void; o
 
   const [invites, setInvites] = useState([{ email: '', role: 'org:member' }])
   const [sending, setSending] = useState(false)
+  const [inviteError, setInviteError] = useState<string | null>(null)
 
   const [activeModules, setActiveModules] = useState<Module[]>(navItems.map(m => m.id))
 
@@ -65,13 +67,26 @@ export function OnboardingFlow({ onFinish, onCancel }: { onFinish: () => void; o
 
   async function handleSendInvites() {
     if (!organization) { setStep(3); return }
+    const valid = invites.filter(i => i.email.trim())
+    if (valid.length === 0) { setStep(3); return }
     setSending(true)
+    setInviteError(null)
     try {
-      const valid = invites.filter(i => i.email.trim())
-      await Promise.all(valid.map(i => organization.inviteMember({ emailAddress: i.email.trim(), role: i.role })))
+      const token = await session?.getToken()
+      await Promise.all(valid.map(async i => {
+        const res = await fetch('/.netlify/functions/invite-member', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+          body: JSON.stringify({ emailAddress: i.email.trim(), role: i.role }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error ?? "Impossible d'envoyer l'invitation.")
+      }))
+      setStep(3)
+    } catch (err) {
+      setInviteError(err instanceof Error ? err.message : "Impossible d'envoyer une ou plusieurs invitations.")
     } finally {
       setSending(false)
-      setStep(3)
     }
   }
 
@@ -152,6 +167,9 @@ export function OnboardingFlow({ onFinish, onCancel }: { onFinish: () => void; o
                 <Plus size={12} />Ajouter un membre
               </button>
             </div>
+            {inviteError && (
+              <p className="mt-3 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{inviteError}</p>
+            )}
             <div className="flex gap-2 mt-6">
               <button onClick={() => setStep(3)} className="px-4 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Passer cette étape</button>
               <button onClick={handleSendInvites} disabled={sending}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useOrganization } from '@clerk/react'
+import { useOrganization, useSession } from '@clerk/react'
 import { Plus, X, PlugZap, SlidersHorizontal } from 'lucide-react'
 import { StatusBadge, Avatar, TableHeader } from '../App'
 import { navItems, ALWAYS_ON_MODULES, type Module } from '../modules'
@@ -25,6 +25,7 @@ export function LiveSettings() {
   })
   const { activeModules, loading: settingsLoading, setModules } = useOrgSettings()
   const { rows: moduleAccessRows, setAccess } = useMemberModuleAccess()
+  const { session } = useSession()
 
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
@@ -66,11 +67,22 @@ export function LiveSettings() {
   }
 
   async function handleInvite() {
-    if (!inviteEmail.trim() || !organization) return
+    if (!inviteEmail.trim() || !organization || !session) return
     setInviting(true)
     setInviteError(null)
     try {
-      await organization.inviteMember({ emailAddress: inviteEmail.trim(), role: inviteRole })
+      const token = await session.getToken()
+      // Routed through a Netlify Function (not organization.inviteMember())
+      // because only Clerk's Backend API can set redirectUrl on an
+      // invitation — the frontend SDK can't, which is why invitations used
+      // to land on Clerk's Account Portal instead of back in MBOKA.
+      const res = await fetch('/.netlify/functions/invite-member', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ emailAddress: inviteEmail.trim(), role: inviteRole }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Impossible d'envoyer l'invitation.")
       await invitations?.revalidate?.()
       setInviteEmail('')
       setShowInvite(false)

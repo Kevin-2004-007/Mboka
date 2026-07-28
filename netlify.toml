@@ -1,6 +1,7 @@
 [build]
   command = "pnpm build"
   publish = "dist"
+  functions = "netlify/functions"
 
 # Single-page app: every path must serve index.html so client-side routing
 # (e.g. /sign/{token} in src/main.tsx) can read window.location itself —

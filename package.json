@@ -10,6 +10,7 @@
     "format": "oxfmt"
   },
   "dependencies": {
+    "@clerk/backend": "^3.13.1",
     "@clerk/localizations": "^4.13.8",
     "@clerk/react": "^6.12.6",
     "@supabase/supabase-js": "^2.110.8",
