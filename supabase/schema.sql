@@ -414,9 +414,17 @@ create table if not exists notifications (
   created_at timestamptz not null default now()
 );
 alter table notifications enable row level security;
-create policy "org_isolation" on notifications for all
-  using (org_id = clerk_org_id())
+-- Split (rather than one "for all" policy) because reads and writes need
+-- different scopes: a member must only ever *see* their own notifications
+-- or broadcast ones (user_id = 'system'), but must be able to *create* a
+-- notification addressed to a teammate (e.g. an e-signature request) —
+-- restricting insert to the caller's own user_id would break that.
+create policy "select_own_or_broadcast" on notifications for select
+  using (org_id = clerk_org_id() and (user_id = 'system' or user_id = (auth.jwt() ->> 'sub')));
+create policy "insert_any_org_member" on notifications for insert
   with check (org_id = clerk_org_id());
+create policy "update_own_or_broadcast" on notifications for update
+  using (org_id = clerk_org_id() and (user_id = 'system' or user_id = (auth.jwt() ->> 'sub')));
 
 -- Replaces the mboka:activeModules:<orgId> localStorage hack from onboarding.
 create table if not exists org_settings (
