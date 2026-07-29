@@ -2,16 +2,19 @@ import { useEffect, useRef } from 'react'
 import { useUser } from '@clerk/react'
 import { useEmployees } from '../data/employees'
 import { usePendingEmployeeInfo } from '../data/pendingEmployeeInfo'
+import { useMemberModuleAccess } from '../data/memberModuleAccess'
 
 // Headless: every org member is necessarily an employee, so instead of
 // making an admin re-enter the same person by hand in Ressources Humaines
-// after inviting them, this auto-creates their employee record the first
-// time they land in the app post-join — pre-filled from the Poste/
-// Département the admin set on the invite modal (LiveSettings.tsx), if any.
+// after inviting them, this auto-creates their employee record — and
+// applies the module restriction, if any — the first time they land in the
+// app post-join, pre-filled from what the admin set on the invite modal
+// (LiveSettings.tsx).
 export function EmployeeSync() {
   const { user } = useUser()
   const { data: employees, loading, insert: insertEmployee } = useEmployees()
   const { data: pendingInfo, remove: removePendingInfo } = usePendingEmployeeInfo()
+  const { setAccess } = useMemberModuleAccess()
   const ranRef = useRef(false)
 
   useEffect(() => {
@@ -32,11 +35,12 @@ export function EmployeeSync() {
         user_id: user!.id,
       })
       if (created && match) {
+        if (match.modules) await setAccess(user!.id, match.modules)
         await removePendingInfo(match.id)
       }
     }
     run()
-  }, [loading, user, employees, pendingInfo, insertEmployee, removePendingInfo])
+  }, [loading, user, employees, pendingInfo, insertEmployee, removePendingInfo, setAccess])
 
   return null
 }

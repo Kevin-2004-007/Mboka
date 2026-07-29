@@ -186,4 +186,5 @@ export type PendingEmployeeInfo = {
   email: string
   role: string
   dept: string
+  modules: string[] | null
 }

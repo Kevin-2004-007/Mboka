@@ -34,6 +34,7 @@ export function LiveSettings() {
   const [invitePoste, setInvitePoste] = useState('')
   const [inviteDept, setInviteDept] = useState('')
   const [inviteRole, setInviteRole] = useState<'org:admin' | 'org:member'>('org:member')
+  const [inviteModules, setInviteModules] = useState<Module[]>([])
   const [inviting, setInviting] = useState(false)
   const [inviteError, setInviteError] = useState<string | null>(null)
   const [modulesError, setModulesError] = useState<string | null>(null)
@@ -53,6 +54,11 @@ export function LiveSettings() {
     setEditModules(restriction ? (restriction.modules as Module[]) : toggleableModules.map(m => m.id))
     setAccessError(null)
     setEditingAccessId(userId)
+  }
+
+  function openInviteModal() {
+    setInviteModules(toggleableModules.map(m => m.id))
+    setShowInvite(true)
   }
 
   async function handleSaveAccess() {
@@ -87,10 +93,17 @@ export function LiveSettings() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? "Impossible d'envoyer l'invitation.")
-      // Carries Poste/Département through to invitation acceptance, since
-      // that's where the employee record gets auto-created (see
-      // EmployeeSync.tsx) — the invitation itself has nowhere to hold them.
-      await insertPendingInfo({ email: inviteEmail.trim().toLowerCase(), role: invitePoste.trim(), dept: inviteDept.trim() })
+      // Carries Poste/Département/modules through to invitation acceptance,
+      // since that's where the employee record and module restriction get
+      // applied (see EmployeeSync.tsx) — the invitation itself has nowhere
+      // else in this flow to hold them.
+      const isFullAccess = toggleableModules.every(m => inviteModules.includes(m.id))
+      await insertPendingInfo({
+        email: inviteEmail.trim().toLowerCase(),
+        role: invitePoste.trim(),
+        dept: inviteDept.trim(),
+        modules: isFullAccess ? null : inviteModules,
+      })
       await invitations?.revalidate?.()
       setInviteEmail('')
       setInvitePoste('')
@@ -140,7 +153,7 @@ export function LiveSettings() {
               {pendingInvitations.length > 0 && ` · ${pendingInvitations.length} invitation${pendingInvitations.length > 1 ? 's' : ''} en attente`}
             </p>
             {membership?.role === 'org:admin' && (
-              <button onClick={() => setShowInvite(true)}
+              <button onClick={openInviteModal}
                 className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors">
                 <Plus size={13} />Inviter un membre
               </button>
@@ -183,6 +196,25 @@ export function LiveSettings() {
                         <button key={r.value} onClick={() => setInviteRole(r.value)}
                           className={`py-2 px-3 text-xs font-medium rounded-lg border transition-colors ${inviteRole === r.value ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>{r.label}</button>
                       ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-700 mb-1.5 block">Modules accessibles</label>
+                    <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-40 overflow-y-auto">
+                      {toggleableModules.map(item => {
+                        const checked = inviteModules.includes(item.id)
+                        return (
+                          <button key={item.id} type="button"
+                            onClick={() => setInviteModules(prev => checked ? prev.filter(m => m !== item.id) : [...prev, item.id])}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 transition-colors text-left">
+                            <item.Icon size={13} className={checked ? 'text-indigo-500' : 'text-gray-300'} />
+                            <span className="text-xs text-gray-700 flex-1 truncate">{item.label}</span>
+                            <span className={`w-8 h-4 rounded-full transition-colors flex items-center ${checked ? 'bg-indigo-500' : 'bg-gray-200'}`}>
+                              <span className={`w-3 h-3 rounded-full bg-white shadow-sm transition-transform mx-0.5 ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
+                            </span>
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                 </div>

@@ -518,6 +518,10 @@ create table if not exists pending_employee_info (
   email text not null,
   role text not null default '',
   dept text not null default '',
+  -- Module restriction chosen at invite time (LiveSettings.tsx), applied to
+  -- member_module_access once the invitee joins (EmployeeSync.tsx). Null
+  -- means no restriction, same convention as member_module_access itself.
+  modules text[],
   created_at timestamptz not null default now()
 );
 alter table pending_employee_info enable row level security;
