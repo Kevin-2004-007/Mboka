@@ -51,6 +51,14 @@ export function LiveESign() {
     new Map((memberships?.data ?? []).filter(m => m.publicUserData?.userId).map(m => [m.publicUserData!.userId!, m])).values(),
   )
 
+  function creatorName(userId: string | null) {
+    if (!userId) return '—'
+    if (userId === user?.id) return 'Vous'
+    const m = orgMembers.find(o => o.publicUserData?.userId === userId)
+    if (!m) return '—'
+    return [m.publicUserData?.firstName, m.publicUserData?.lastName].filter(Boolean).join(' ') || m.publicUserData?.identifier || 'Membre'
+  }
+
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState('Tous')
   const [showCreate, setShowCreate] = useState(false)
@@ -111,19 +119,29 @@ export function LiveESign() {
     setCreating(false)
     if (!doc) return
 
+    const failedNotifications: string[] = []
     for (const m of memberParties) {
       const name = [m.publicUserData?.firstName, m.publicUserData?.lastName].filter(Boolean).join(' ') || m.publicUserData?.identifier || 'Membre'
-      await insertSigner({ esign_document_id: doc.id, name, initials: initialsOf(name), done: false, user_id: m.publicUserData!.userId! })
-      await insertNotification({
+      const signer = await insertSigner({ esign_document_id: doc.id, name, initials: initialsOf(name), done: false, user_id: m.publicUserData!.userId! })
+      if (!signer) continue
+      const notif = await insertNotification({
         user_id: m.publicUserData!.userId!,
         title: 'Nouvelle demande de signature',
         body: `« ${title.trim()} » attend votre signature`,
         module: 'Signature électronique',
         read: false,
       })
+      if (!notif) failedNotifications.push(name)
     }
     for (const name of validParties) {
       await insertSigner({ esign_document_id: doc.id, name, initials: initialsOf(name), done: false, user_id: null })
+    }
+
+    if (failedNotifications.length > 0) {
+      // The document and signers are already created — leave the modal open
+      // (instead of the usual reset-and-close) so this doesn't get missed.
+      setCreateError(`Demande créée, mais la notification n'a pas pu être envoyée à : ${failedNotifications.join(', ')}.`)
+      return
     }
 
     setTitle('')
@@ -305,7 +323,7 @@ export function LiveESign() {
 
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
         <table className="w-full text-xs">
-          <TableHeader cols={['Document', 'Échéance', 'Signataires', 'Statut', '']} />
+          <TableHeader cols={['Document', 'Échéance', 'Envoyé par', 'Signataires', 'Statut', '']} />
           <tbody>
             {filtered.map((doc, i) => {
               const docSigners = signers.filter(s => s.esign_document_id === doc.id)
@@ -313,6 +331,7 @@ export function LiveESign() {
                 <tr key={doc.id} onClick={() => setSelectedId(doc.id)} className={`border-b border-gray-50 hover:bg-gray-50/60 cursor-pointer transition-colors ${i === filtered.length - 1 ? 'border-0' : ''}`}>
                   <td className="px-4 py-3 font-medium text-gray-900 max-w-[240px] truncate">{doc.title}</td>
                   <td className="px-4 py-3 text-gray-400">{formatDate(doc.deadline)}</td>
+                  <td className="px-4 py-3 text-gray-500">{creatorName(doc.created_by)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       {docSigners.map(s => (
@@ -336,9 +355,9 @@ export function LiveESign() {
                 </tr>
               )
             })}
-            {loading && <TableSkeleton cols={5} />}
+            {loading && <TableSkeleton cols={6} />}
             {!loading && filtered.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-10 text-center text-gray-400">Aucune demande de signature.</td></tr>
+              <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400">Aucune demande de signature.</td></tr>
             )}
           </tbody>
         </table>
