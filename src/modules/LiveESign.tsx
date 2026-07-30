@@ -5,7 +5,6 @@ import { StatusBadge, Avatar, TableHeader } from '../App'
 import { TableSkeleton } from '../ui/Skeleton'
 import { useSupabaseClient } from '../lib/supabase'
 import { useEsignDocuments, useEsignSigners } from '../data/esign'
-import { useNotifications } from '../data/notifications'
 
 function formatDate(value: string | null) {
   if (!value) return '—'
@@ -39,7 +38,6 @@ function effectiveStatus(doc: { status: string; deadline: string | null }) {
 export function LiveESign() {
   const { data: docs, loading, error, insert: insertDoc, update: updateDoc, remove: removeDoc } = useEsignDocuments()
   const { data: signers, insert: insertSigner, update: updateSigner } = useEsignSigners()
-  const { insert: insertNotification } = useNotifications()
   const { organization, memberships } = useOrganization({ memberships: true })
   const { user } = useUser()
   const supabase = useSupabaseClient()
@@ -124,14 +122,18 @@ export function LiveESign() {
       const name = [m.publicUserData?.firstName, m.publicUserData?.lastName].filter(Boolean).join(' ') || m.publicUserData?.identifier || 'Membre'
       const signer = await insertSigner({ esign_document_id: doc.id, name, initials: initialsOf(name), done: false, user_id: m.publicUserData!.userId! })
       if (!signer) continue
-      const notif = await insertNotification({
+      // Direct call (not the generic useNotifications() hook) so a failure
+      // here carries the actual Postgres/PostgREST error message instead of
+      // just "insert returned null".
+      const { error: notifErr } = await (supabase.from('notifications') as any).insert({
+        org_id: organization.id,
         user_id: m.publicUserData!.userId!,
         title: 'Nouvelle demande de signature',
         body: `« ${title.trim()} » attend votre signature`,
         module: 'Signature électronique',
         read: false,
       })
-      if (!notif) failedNotifications.push(name)
+      if (notifErr) failedNotifications.push(`${name} (${notifErr.message})`)
     }
     for (const name of validParties) {
       await insertSigner({ esign_document_id: doc.id, name, initials: initialsOf(name), done: false, user_id: null })
