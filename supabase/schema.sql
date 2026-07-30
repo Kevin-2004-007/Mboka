@@ -163,10 +163,31 @@ create table if not exists stock_items (
   warehouse text,
   min_qty int not null default 0,
   value numeric not null default 0,
+  -- Optional: who to reorder from. Pre-fills the supplier field when using
+  -- "Commander" on a low/out-of-stock item to open a purchase order (see
+  -- LiveStock.tsx / LiveProcurement.tsx).
+  supplier text,
   created_at timestamptz not null default now()
 );
 alter table stock_items enable row level security;
 create policy "org_isolation" on stock_items for all
+  using (org_id = clerk_org_id())
+  with check (org_id = clerk_org_id());
+
+-- One row per quantity adjustment ("Mouvement de stock" in LiveStock.tsx) —
+-- keeps a trace of who moved how much and when, instead of just silently
+-- overwriting stock_items.qty with no history.
+create table if not exists stock_movements (
+  id uuid primary key default gen_random_uuid(),
+  org_id text not null,
+  stock_item_id uuid references stock_items(id) on delete cascade,
+  delta int not null,
+  note text,
+  user_id text,
+  created_at timestamptz not null default now()
+);
+alter table stock_movements enable row level security;
+create policy "org_isolation" on stock_movements for all
   using (org_id = clerk_org_id())
   with check (org_id = clerk_org_id());
 

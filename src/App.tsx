@@ -2310,6 +2310,7 @@ function Workspace({
   const [showNotifs, setShowNotifs] = useState(false)
   const [darkMode, setDarkMode] = useState(false)
   const [liveUnread, setLiveUnread] = useState(0)
+  const [poPrefillSupplier, setPoPrefillSupplier] = useState<string | null>(null)
   const unread = live ? liveUnread : notifications.filter(n => !n.read).length
 
   const cfg = moduleConfig[activeModule]
@@ -2360,8 +2361,12 @@ function Workspace({
           {activeModule === 'crm' && (live ? <LiveCRM /> : <CRMModule />)}
           {activeModule === 'finance' && (live ? <LiveFinance /> : <FinanceModule />)}
           {activeModule === 'accounting' && (live ? <LiveAccounting /> : <AccountingModule />)}
-          {activeModule === 'procurement' && (live ? <LiveProcurement /> : <ProcurementModule />)}
-          {activeModule === 'stock' && (live ? <LiveStock /> : <StockModule />)}
+          {activeModule === 'procurement' && (live
+            ? <LiveProcurement prefillSupplier={poPrefillSupplier} onPrefillConsumed={() => setPoPrefillSupplier(null)} />
+            : <ProcurementModule />)}
+          {activeModule === 'stock' && (live
+            ? <LiveStock onRequestOrder={supplier => { setPoPrefillSupplier(supplier); setActiveModule('procurement') }} />
+            : <StockModule />)}
           {activeModule === 'expenses' && (live ? <LiveExpenses /> : <ExpensesModule />)}
           {activeModule === 'projects' && (live ? <LiveProjects /> : <ProjectsModule />)}
           {activeModule === 'support' && (live ? <LiveSupport /> : <SupportModule />)}

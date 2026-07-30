@@ -63,6 +63,14 @@ export type StockItem = {
   warehouse: string | null
   min_qty: number
   value: number
+  supplier: string | null
+}
+
+export type StockMovement = {
+  stock_item_id: string | null
+  delta: number
+  note: string | null
+  user_id: string | null
 }
 
 export type Expense = {

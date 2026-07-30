@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Search, Plus, X, Truck, Send, Trash2 } from 'lucide-react'
 import { Avatar, StatusBadge, formatEur, TableHeader } from '../App'
 import { TableSkeleton } from '../ui/Skeleton'
@@ -13,13 +13,24 @@ function formatDate(value: string | null) {
   return new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value))
 }
 
-export function LiveProcurement() {
+export function LiveProcurement({ prefillSupplier, onPrefillConsumed }: { prefillSupplier?: string | null; onPrefillConsumed?: () => void }) {
   const { data: orders, loading, error, insert, update, remove } = usePurchaseOrders()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('Tous')
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ supplier: '', amount: '', delivery_on: '', items_count: '1' })
   const [dateError, setDateError] = useState<string | null>(null)
+
+  // Arriving here from Stock's "Commander" action on a low/out-of-stock
+  // item: open straight into a pre-filled purchase order instead of making
+  // the admin retype the supplier.
+  useEffect(() => {
+    if (!prefillSupplier) return
+    setForm(f => ({ ...f, supplier: prefillSupplier }))
+    setShowCreate(true)
+    onPrefillConsumed?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillSupplier])
 
   const statuses = ['Tous', 'Brouillon', 'Envoyé', 'Reçu']
   const filtered = orders.filter(po => {
