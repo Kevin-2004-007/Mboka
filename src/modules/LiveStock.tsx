@@ -9,7 +9,7 @@ import type { StockItem } from '../data/types'
 export function LiveStock() {
   const { data: items, loading, error, insert, update } = useStockItems()
   const [showCreate, setShowCreate] = useState(false)
-  const [form, setForm] = useState({ ref: '', name: '', qty: '0', warehouse: '', min_qty: '0', value: '0' })
+  const [form, setForm] = useState({ name: '', qty: '0', warehouse: '', min_qty: '0', value: '0' })
   const [adjusting, setAdjusting] = useState<TableRow<StockItem> | null>(null)
   const [delta, setDelta] = useState('0')
 
@@ -17,10 +17,18 @@ export function LiveStock() {
   const faible = items.filter(i => stockStatus(i.qty, i.min_qty) === 'Stock faible').length
   const totalValue = items.reduce((s, i) => s + Number(i.value), 0)
 
+  function nextRef() {
+    const maxSeq = items.reduce((max, i) => {
+      const match = /^REF-(\d+)$/.exec(i.ref)
+      return match ? Math.max(max, Number(match[1])) : max
+    }, 0)
+    return `REF-${String(maxSeq + 1).padStart(4, '0')}`
+  }
+
   async function handleCreate() {
-    if (!form.ref.trim() || !form.name.trim()) return
+    if (!form.name.trim()) return
     const created = await insert({
-      ref: form.ref.trim(),
+      ref: nextRef(),
       name: form.name.trim(),
       qty: Number(form.qty) || 0,
       warehouse: form.warehouse.trim() || null,
@@ -28,7 +36,7 @@ export function LiveStock() {
       value: Number(form.value) || 0,
     })
     if (!created) return
-    setForm({ ref: '', name: '', qty: '0', warehouse: '', min_qty: '0', value: '0' })
+    setForm({ name: '', qty: '0', warehouse: '', min_qty: '0', value: '0' })
     setShowCreate(false)
   }
 
@@ -105,12 +113,8 @@ export function LiveStock() {
               <button onClick={() => setShowCreate(false)} className="p-1 rounded-lg hover:bg-gray-100 transition-colors"><X size={16} className="text-gray-400" /></button>
             </div>
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <input value={form.ref} onChange={e => setForm(f => ({ ...f, ref: e.target.value }))} placeholder="Référence"
-                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
-                <input value={form.warehouse} onChange={e => setForm(f => ({ ...f, warehouse: e.target.value }))} placeholder="Entrepôt"
-                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
-              </div>
+              <input value={form.warehouse} onChange={e => setForm(f => ({ ...f, warehouse: e.target.value }))} placeholder="Entrepôt"
+                className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
               <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Nom du produit"
                 className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 placeholder:text-gray-400" />
               <div className="grid grid-cols-3 gap-3">
