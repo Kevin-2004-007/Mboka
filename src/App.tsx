@@ -2428,9 +2428,16 @@ function AuthedWorkspace() {
   // No restriction row for this member -> they see every module the org has
   // active (see useMemberModuleAccess); a row narrows that down further.
   const myAccess = user ? moduleAccessRows.find(r => r.user_id === user.id) : undefined
-  const visibleModules = myAccess
+  const accessVisibleModules = myAccess
     ? Array.from(new Set([...myAccess.modules, ...ALWAYS_ON_MODULES])).filter(m => orgVisibleModules.includes(m as Module)) as Module[]
     : orgVisibleModules
+
+  // Paramètres stays in ALWAYS_ON_MODULES so it's locked "on" in the
+  // org-wide Modules actifs toggle grid — but it's still admin-only, so a
+  // regular member never sees it in their own sidebar regardless.
+  const visibleModules = membership?.role === 'org:admin'
+    ? accessVisibleModules
+    : accessVisibleModules.filter(m => m !== 'settings')
 
   return (
     <>
