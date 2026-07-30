@@ -45,7 +45,7 @@ import { useMemberModuleAccess } from './data/memberModuleAccess'
 import { LiveBI } from './modules/LiveBI'
 import { LiveAutomations } from './modules/LiveAutomations'
 import { LiveQuality } from './modules/LiveQuality'
-import { LiveUnreadCount, LiveNotificationsPanel } from './modules/LiveNotifications'
+import { LiveNotificationsHost } from './modules/LiveNotifications'
 import { LiveCmdKModal } from './modules/LiveCmdKModal'
 import { NotificationRules } from './modules/NotificationRules'
 import { EmployeeSync } from './modules/EmployeeSync'
@@ -2339,10 +2339,10 @@ function Workspace({
           ? <LiveCmdKModal onClose={() => setShowSearch(false)} onNavigate={(m) => { setActiveModule(m); setShowSearch(false) }} />
           : <CmdKModal onClose={() => setShowSearch(false)} onNavigate={(m) => { setActiveModule(m); setShowSearch(false) }} />
       )}
-      {live && <LiveUnreadCount onChange={setLiveUnread} />}
-      {showNotifs && (live
-        ? <LiveNotificationsPanel onClose={() => setShowNotifs(false)} onNavigate={setActiveModule} />
-        : <NotificationsPanel onClose={() => setShowNotifs(false)} />)}
+      {live && (
+        <LiveNotificationsHost show={showNotifs} onClose={() => setShowNotifs(false)} onNavigate={setActiveModule} onUnreadChange={setLiveUnread} />
+      )}
+      {!live && showNotifs && <NotificationsPanel onClose={() => setShowNotifs(false)} />}
 
       <Sidebar
         active={activeModule} onNavigate={setActiveModule} onSearch={() => setShowSearch(true)}

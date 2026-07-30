@@ -28,20 +28,28 @@ function timeAgo(value: string) {
   return `il y a ${Math.floor(hours / 24)}j`
 }
 
-// Headless: reports the live unread count up to Workspace without owning
-// any visible UI, so the demo-mode Topbar/badge stays untouched.
-export function LiveUnreadCount({ onChange }: { onChange: (n: number) => void }) {
-  const { data } = useNotifications()
-  const unread = data.filter(n => !n.read).length
-  useEffect(() => {
-    onChange(unread)
-  }, [unread, onChange])
-  return null
-}
-
-export function LiveNotificationsPanel({ onClose, onNavigate }: { onClose: () => void; onNavigate?: (m: Module) => void }) {
+// Always mounted while live (regardless of whether the panel is open) so
+// the badge count and the panel read from the *same* useNotifications()
+// call. Two separate hook instances (the previous LiveUnreadCount +
+// LiveNotificationsPanel split) each kept their own copy of the data, only
+// reconciled via Supabase Realtime — so marking a notification read didn't
+// update the badge unless the `notifications` table happened to be added to
+// the Realtime publication. A single shared instance updates both
+// synchronously from the same update() call, with no such dependency.
+export function LiveNotificationsHost({ show, onClose, onNavigate, onUnreadChange }: {
+  show: boolean
+  onClose: () => void
+  onNavigate?: (m: Module) => void
+  onUnreadChange: (n: number) => void
+}) {
   const { data: notifs, update } = useNotifications()
   const unread = notifs.filter(n => !n.read).length
+
+  useEffect(() => {
+    onUnreadChange(unread)
+  }, [unread, onUnreadChange])
+
+  if (!show) return null
 
   return (
     <div className="fixed inset-0 z-40" onClick={onClose}>
