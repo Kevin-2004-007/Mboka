@@ -465,17 +465,23 @@ create table if not exists notifications (
   created_at timestamptz not null default now()
 );
 alter table notifications enable row level security;
--- Split (rather than one "for all" policy) because reads and writes need
--- different scopes: a member must only ever *see* their own notifications
--- or broadcast ones (user_id = 'system'), but must be able to *create* a
--- notification addressed to a teammate (e.g. an e-signature request) —
--- restricting insert to the caller's own user_id would break that.
-create policy "select_own_or_broadcast" on notifications for select
-  using (org_id = clerk_org_id() and (user_id = 'system' or user_id = (auth.jwt() ->> 'sub')));
+-- Every notification is fanned out to a real member's user_id at creation
+-- (see NotificationRules.tsx) — there's no more shared "system" row, so
+-- read/unread state is always that member's own and select/insert/update
+-- can all just check ownership directly.
+create unique index if not exists notifications_dedup on notifications(org_id, user_id, title, body);
+-- Split (rather than one "for all" policy) because reads/updates need a
+-- narrower scope than writes: a member must only ever *see*/*update* their
+-- own notifications, but must be able to *create* one addressed to a
+-- teammate (e.g. an e-signature request, or NotificationRules fanning an
+-- alert out to the whole org) — restricting insert to the caller's own
+-- user_id would break both.
+create policy "select_own" on notifications for select
+  using (org_id = clerk_org_id() and user_id = (auth.jwt() ->> 'sub'));
 create policy "insert_any_org_member" on notifications for insert
   with check (org_id = clerk_org_id());
-create policy "update_own_or_broadcast" on notifications for update
-  using (org_id = clerk_org_id() and (user_id = 'system' or user_id = (auth.jwt() ->> 'sub')));
+create policy "update_own" on notifications for update
+  using (org_id = clerk_org_id() and user_id = (auth.jwt() ->> 'sub'));
 
 -- Replaces the mboka:activeModules:<orgId> localStorage hack from onboarding.
 create table if not exists org_settings (

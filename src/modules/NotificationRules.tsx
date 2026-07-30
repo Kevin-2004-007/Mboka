@@ -1,4 +1,6 @@
 import { useEffect } from 'react'
+import { useOrganization } from '@clerk/react'
+import { useSupabaseClient } from '../lib/supabase'
 import { useNotifications } from '../data/notifications'
 import { useInvoices } from '../data/invoices'
 import { useLeaveRequests } from '../data/leaveRequests'
@@ -10,23 +12,33 @@ type Candidate = { title: string; body: string; module: string }
 
 // Headless: no UI of its own. Computes real alerts from live data (overdue
 // invoices, pending leave, low/out-of-stock items, urgent open tickets) and
-// persists any not already recorded, so the notification bell reflects
-// actual org state instead of staying permanently empty. There's no
+// fans each one out as an individual row per org member, so the bell
+// reflects actual org state and every member's read/unread state stays
+// theirs alone — a single shared "system" row (the previous design) meant
+// one person reading an alert marked it read for everyone. There's no
 // server-side job here — this runs client-side whenever the underlying
 // data changes, which is sufficient for a single small team but won't catch
 // changes that happen while nobody has the app open.
 export function NotificationRules() {
-  const { data: notifications, insert } = useNotifications()
+  const { data: notifications } = useNotifications()
+  const { memberships } = useOrganization({ memberships: true })
+  const { organization } = useOrganization()
+  const supabase = useSupabaseClient()
   const { data: invoices } = useInvoices()
   const { data: leaveRequests } = useLeaveRequests()
   const { data: employees } = useEmployees()
   const { data: stockItems } = useStockItems()
   const { data: tickets } = useTickets()
 
+  const memberIds = Array.from(
+    new Set((memberships?.data ?? []).map(m => m.publicUserData?.userId).filter((id): id is string => !!id)),
+  )
+
   useEffect(() => {
     let cancelled = false
 
     async function run() {
+      if (!organization || memberIds.length === 0) return
       const candidates: Candidate[] = []
       const today = new Date()
 
@@ -56,18 +68,28 @@ export function NotificationRules() {
         }
       }
 
-      const missing = candidates.filter(c => !notifications.some(n => n.title === c.title && n.body === c.body))
-      for (const c of missing) {
-        if (cancelled) return
-        await insert({ user_id: 'system', title: c.title, body: c.body, module: c.module, read: false })
-      }
+      const rows = candidates.flatMap(c =>
+        memberIds
+          .filter(userId => !notifications.some(n => n.user_id === userId && n.title === c.title && n.body === c.body))
+          .map(userId => ({ org_id: organization.id, user_id: userId, title: c.title, body: c.body, module: c.module, read: false })),
+      )
+      if (rows.length === 0 || cancelled) return
+
+      // upsert + ignoreDuplicates (backed by the notifications_dedup unique
+      // index) makes this idempotent under the same-tick races this effect
+      // is prone to (it re-runs on every realtime-driven data refresh) —
+      // a plain insert() after a stale "does this exist" check is what
+      // produced duplicate rows before.
+      await (supabase.from('notifications') as any)
+        .upsert(rows, { onConflict: 'org_id,user_id,title,body', ignoreDuplicates: true })
     }
 
     run()
     return () => {
       cancelled = true
     }
-  }, [invoices, leaveRequests, employees, stockItems, tickets, notifications, insert])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoices, leaveRequests, employees, stockItems, tickets, notifications, organization?.id, memberIds.join(',')])
 
   return null
 }
